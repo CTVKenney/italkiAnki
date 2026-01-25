@@ -12,7 +12,7 @@ from .llm import LLMClient, openai_client_from_env
 class UnconfiguredLLM(LLMClient):
     def classify(self, lines, seed=None):
         raise RuntimeError(
-            "LLM client not configured. Set OPENAI_API_KEY or provide a custom LLM."
+            "LLM client not configured. Set OPENAI_API_KEY with --openai or provide a custom LLM."
         )
 
 
