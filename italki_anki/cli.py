@@ -6,13 +6,13 @@ from pathlib import Path
 from .audio import NullAudioProvider, PollyAudioProvider
 from .builder import build_from_text
 from .cards import BuildConfig
-from .llm import LLMClient
+from .llm import LLMClient, openai_client_from_env
 
 
 class UnconfiguredLLM(LLMClient):
     def classify(self, lines, seed=None):
         raise RuntimeError(
-            "LLM client not configured. Provide an implementation of LLMClient."
+            "LLM client not configured. Set OPENAI_API_KEY with --openai or provide a custom LLM."
         )
 
 
@@ -32,7 +32,10 @@ def build_command(args: argparse.Namespace) -> int:
     else:
         audio = PollyAudioProvider(output_dir=str(output_dir / "audio"))
 
-    llm = UnconfiguredLLM()
+    if args.openai:
+        llm = openai_client_from_env()
+    else:
+        llm = UnconfiguredLLM()
 
     build_from_text(text, llm, audio, str(output_dir), config)
     return 0
@@ -51,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=8,
         help="Soft limit per cloze chunk",
+    )
+    build.add_argument(
+        "--openai",
+        action="store_true",
+        help="Use OpenAI API for classification (requires OPENAI_API_KEY)",
     )
     build.set_defaults(func=build_command)
     return parser
