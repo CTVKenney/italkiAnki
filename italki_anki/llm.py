@@ -34,6 +34,34 @@ class OpenAIClient(LLMClient):
         return parse_classified_items(content)
 
 
+@dataclass
+class StubClient(LLMClient):
+    """Stub LLM client for offline testing without API calls."""
+
+    def classify(self, lines: Iterable[str], seed: int | None = None) -> List[ClassifiedItem]:
+        items: List[ClassifiedItem] = []
+        for line in lines:
+            if "=" in line:
+                item_type = ItemType.GRAMMAR
+            elif line.endswith(("？", "?")):
+                item_type = ItemType.SENTENCE
+            else:
+                item_type = ItemType.VOCAB
+            items.append(
+                ClassifiedItem(
+                    item_type=item_type,
+                    simplified=line,
+                    traditional=line,
+                    pinyin="",
+                    english="",
+                    gloss=None,
+                    measure_word=None,
+                    measure_word_pinyin=None,
+                )
+            )
+        return items
+
+
 def openai_client_from_env() -> OpenAIClient:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:

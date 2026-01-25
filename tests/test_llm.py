@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from italki_anki.llm import OpenAIClient, parse_classified_items
+from italki_anki.llm import OpenAIClient, StubClient, parse_classified_items
 
 
 def test_parse_classified_items_with_envelope():
@@ -45,3 +45,11 @@ def test_openai_client_rejects_bad_payload():
     with patch("urllib.request.urlopen", return_value=mock_response):
         with pytest.raises(ValueError):
             client.classify(["bad"])
+
+
+def test_stub_client_classifies_lines():
+    client = StubClient()
+    items = client.classify(["清楚 = 明白", "你好吗？", "书房"])
+    assert items[0].item_type.value == "grammar"
+    assert items[1].item_type.value == "sentence"
+    assert items[2].item_type.value == "vocabulary"

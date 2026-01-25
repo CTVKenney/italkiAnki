@@ -6,7 +6,7 @@ from pathlib import Path
 from .audio import NullAudioProvider, PollyAudioProvider
 from .builder import build_from_text
 from .cards import BuildConfig
-from .llm import LLMClient, openai_client_from_env
+from .llm import LLMClient, StubClient, openai_client_from_env
 
 
 class UnconfiguredLLM(LLMClient):
@@ -32,7 +32,9 @@ def build_command(args: argparse.Namespace) -> int:
     else:
         audio = PollyAudioProvider(output_dir=str(output_dir / "audio"))
 
-    if args.openai:
+    if args.stub_llm:
+        llm = StubClient()
+    elif args.openai:
         llm = openai_client_from_env()
     else:
         llm = UnconfiguredLLM()
@@ -59,6 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--openai",
         action="store_true",
         help="Use OpenAI API for classification (requires OPENAI_API_KEY)",
+    )
+    build.add_argument(
+        "--stub-llm",
+        action="store_true",
+        help="Use stub LLM client for offline testing",
     )
     build.set_defaults(func=build_command)
     return parser
