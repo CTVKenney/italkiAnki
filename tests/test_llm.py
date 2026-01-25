@@ -53,3 +53,9 @@ def test_stub_client_classifies_lines():
     assert items[0].item_type.value == "grammar"
     assert items[1].item_type.value == "sentence"
     assert items[2].item_type.value == "vocabulary"
+
+
+def test_stub_client_strips_parenthetical_gloss():
+    client = StubClient()
+    items = client.classify(["书房 (study)"])
+    assert items[0].simplified == "书房"

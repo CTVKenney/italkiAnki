@@ -41,17 +41,18 @@ class StubClient(LLMClient):
     def classify(self, lines: Iterable[str], seed: int | None = None) -> List[ClassifiedItem]:
         items: List[ClassifiedItem] = []
         for line in lines:
-            if "=" in line:
+            normalized = strip_parenthetical_gloss(line)
+            if "=" in normalized:
                 item_type = ItemType.GRAMMAR
-            elif line.endswith(("？", "?")):
+            elif normalized.endswith(("？", "?")):
                 item_type = ItemType.SENTENCE
             else:
                 item_type = ItemType.VOCAB
             items.append(
                 ClassifiedItem(
                     item_type=item_type,
-                    simplified=line,
-                    traditional=line,
+                    simplified=normalized,
+                    traditional=normalized,
                     pinyin="",
                     english="",
                     gloss=None,
@@ -60,6 +61,13 @@ class StubClient(LLMClient):
                 )
             )
         return items
+
+
+def strip_parenthetical_gloss(text: str) -> str:
+    if text.endswith(")") and " (" in text:
+        base, _, _ = text.rpartition(" (")
+        return base
+    return text
 
 
 def openai_client_from_env() -> OpenAIClient:
