@@ -42,7 +42,7 @@ def classify_lines(
     lines = []
     for line in raw_lines:
         if getattr(line, "gloss", None):
-            lines.append(f\"{line.text} ({line.gloss})\")
+            lines.append(f"{line.text} ({line.gloss})")
         else:
             lines.append(line.text)
     items = llm.classify(lines, seed=config.seed)
