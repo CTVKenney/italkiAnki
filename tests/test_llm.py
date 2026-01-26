@@ -1,9 +1,11 @@
+import io
 import json
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+import urllib.error
 
-from italki_anki.llm import OpenAIClient, StubClient, parse_classified_items
+from italki_anki.llm import OpenAIClient, StubClient, parse_classified_items, post_json
 
 
 def test_parse_classified_items_with_envelope():
@@ -59,3 +61,37 @@ def test_stub_client_strips_parenthetical_gloss():
     client = StubClient()
     items = client.classify(["书房 (study)"])
     assert items[0].simplified == "书房"
+
+
+def test_post_json_retries_on_rate_limit(monkeypatch):
+    payload = {"model": "gpt-4o-mini"}
+    response_payload = {"choices": [{"message": {"content": "{\"items\": []}"}}]}
+    response_body = json.dumps(response_payload).encode("utf-8")
+    calls = {"count": 0}
+    sleeps: list[float] = []
+
+    def fake_urlopen(request, timeout=60):
+        calls["count"] += 1
+        if calls["count"] <= 2:
+            raise urllib.error.HTTPError(
+                request.full_url,
+                429,
+                "rate limit",
+                None,
+                io.BytesIO(b"rate limited"),
+            )
+        mock_response = MagicMock()
+        mock_response.__enter__.return_value = mock_response
+        mock_response.status = 200
+        mock_response.read.return_value = response_body
+        return mock_response
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("random.random", lambda: 0.0)
+    monkeypatch.setattr("time.sleep", lambda seconds: sleeps.append(seconds))
+
+    result = post_json("https://api.openai.com/v1/chat/completions", payload, "key")
+
+    assert result == response_payload
+    assert calls["count"] == 3
+    assert sleeps == [1, 2]
