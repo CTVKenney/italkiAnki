@@ -98,6 +98,19 @@ def build_cloze_notes(
     for item in items:
         if item.item_type is ItemType.VOCAB:
             continue
+        if item.item_type is ItemType.GRAMMAR and is_stub_grammar_item(item):
+            example_sentences = build_stub_grammar_examples(item.simplified)
+            for sentence in example_sentences:
+                cloze_lines = build_cloze_lines(
+                    "",
+                    sentence,
+                    sentence,
+                    "",
+                    config.max_cloze_len,
+                )
+                rendered_lines = render_cloze_lines(cloze_lines)
+                notes.append(ClozeNote(text="\n".join(rendered_lines)))
+            continue
         cloze_lines = build_cloze_lines(
             item.english,
             item.simplified,
@@ -108,6 +121,29 @@ def build_cloze_notes(
         rendered_lines = render_cloze_lines(cloze_lines)
         notes.append(ClozeNote(text="\n".join(rendered_lines)))
     return notes
+
+
+def is_stub_grammar_item(item: ClassifiedItem) -> bool:
+    return (
+        not item.english.strip()
+        and not item.pinyin.strip()
+        and item.simplified == item.traditional
+        and "=" in item.simplified
+    )
+
+
+def build_stub_grammar_examples(text: str) -> List[str]:
+    left, _, right = text.partition("=")
+    left = left.strip()
+    right = right.strip()
+    sentences: List[str] = []
+    if left:
+        sentences.append(f"我说得很{left}。")
+    if right:
+        sentences.append(f"你{right}了吗？")
+    if len(sentences) < 2:
+        sentences.append("请再说明一次。")
+    return sentences[:2]
 
 
 def write_vocab_csv(cards: Iterable[VocabCard], path: str) -> None:

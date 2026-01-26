@@ -98,8 +98,10 @@ def render_cloze(lines: ClozeLines) -> str:
 def render_cloze_lines(lines: ClozeLines) -> List[str]:
     simplified = render_cloze_line(lines.simplified_chunks)
     traditional = render_cloze_line(lines.traditional_chunks)
-    pinyin = render_cloze_line(lines.pinyin_chunks)
-    return [lines.english, simplified, traditional, pinyin]
+    output = [lines.english, simplified, traditional]
+    if lines.pinyin_chunks and any(chunk.strip() for chunk in lines.pinyin_chunks):
+        output.append(render_cloze_line(lines.pinyin_chunks))
+    return output
 
 
 def render_cloze_line(chunks: Iterable[str]) -> str:
