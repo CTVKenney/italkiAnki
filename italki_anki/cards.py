@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
 
 from .audio import AudioProvider
-from .cloze import PINYIN_NUMBERS, build_cloze_lines, render_cloze
+from .cloze import PINYIN_NUMBERS, build_cloze_lines, render_cloze_lines
 from .models import ClassifiedItem, ClozeNote, ItemType, VocabCard
 
 DEGREE_PREFIXES = ("太",)
@@ -105,7 +105,8 @@ def build_cloze_notes(
             item.pinyin,
             config.max_cloze_len,
         )
-        notes.append(ClozeNote(text=render_cloze(cloze_lines)))
+        rendered_lines = render_cloze_lines(cloze_lines)
+        notes.append(ClozeNote(text="\n".join(rendered_lines)))
     return notes
 
 

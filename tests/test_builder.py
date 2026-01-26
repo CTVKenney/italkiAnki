@@ -9,7 +9,7 @@ from italki_anki.llm import StubClient
 def test_cloze_csv_writes_single_row_with_embedded_newline(tmp_path):
     output_dir = tmp_path / "out"
     build_from_text(
-        "你好吗？",
+        "清楚 = 明白",
         StubClient(),
         NullAudioProvider(output_dir=str(output_dir)),
         str(output_dir),

@@ -92,10 +92,14 @@ def align_chunks(text: str, sizes: Iterable[int]) -> List[str]:
 
 
 def render_cloze(lines: ClozeLines) -> str:
+    return "\n".join(render_cloze_lines(lines))
+
+
+def render_cloze_lines(lines: ClozeLines) -> List[str]:
     simplified = render_cloze_line(lines.simplified_chunks)
     traditional = render_cloze_line(lines.traditional_chunks)
     pinyin = render_cloze_line(lines.pinyin_chunks)
-    return "\n".join([lines.english, simplified, traditional, pinyin])
+    return [lines.english, simplified, traditional, pinyin]
 
 
 def render_cloze_line(chunks: Iterable[str]) -> str:
