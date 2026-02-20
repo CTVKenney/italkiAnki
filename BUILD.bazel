@@ -4,14 +4,17 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 py_library(
     name = "italki_anki_lib",
     srcs = glob(["italki_anki/*.py"]),
+    deps = [
+        requirement("boto3"),
+    ],
     imports = ["."],
     visibility = ["//visibility:public"],
 )
 
 py_binary(
     name = "italki_anki_cli",
-    srcs = ["italki_anki/cli.py"],
-    main = "italki_anki/cli.py",
+    srcs = ["italki_anki_bazel_main.py"],
+    main = "italki_anki_bazel_main.py",
     deps = [":italki_anki_lib"],
 )
 
@@ -24,4 +27,9 @@ py_test(
         requirement("pytest"),
     ],
     imports = ["."],
+)
+
+test_suite(
+    name = "all_tests",
+    tests = [":unit_tests"],
 )

@@ -9,6 +9,8 @@ from italki_anki.llm import (
     OpenAIClient,
     StubClient,
     build_openai_payload,
+    chunk_lines,
+    openai_client_from_env,
     parse_classified_items,
     post_json,
 )
@@ -137,3 +139,63 @@ def test_post_json_429_after_retries_has_actionable_message(monkeypatch):
     assert "429" in message
     assert "insufficient quota" in message
     assert "insufficient_quota" in message
+
+
+def test_openai_client_from_env_requires_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY is not set"):
+        openai_client_from_env()
+
+
+def test_openai_client_from_env_reads_overrides(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1")
+    monkeypatch.setenv("OPENAI_MAX_LINES", "7")
+
+    client = openai_client_from_env()
+
+    assert client.api_key == "sk-test"
+    assert client.model == "gpt-test"
+    assert client.base_url == "https://example.test/v1"
+    assert client.max_lines == 7
+
+
+def test_post_json_non_retryable_http_error_surfaces_detail(monkeypatch):
+    payload = {"model": "gpt-4o-mini"}
+    body = b'{"error":{"message":"bad key","type":"invalid_request_error","code":"invalid_api_key"}}'
+
+    def fake_urlopen(request, timeout=60):
+        raise urllib.error.HTTPError(request.full_url, 401, "unauthorized", None, io.BytesIO(body))
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        post_json("https://api.openai.com/v1/chat/completions", payload, "bad-key")
+    message = str(exc_info.value)
+    assert "401" in message
+    assert "invalid_api_key" in message
+
+
+def test_post_json_urlerror_is_wrapped(monkeypatch):
+    payload = {"model": "gpt-4o-mini"}
+
+    def fake_urlopen(request, timeout=60):
+        del request
+        del timeout
+        raise urllib.error.URLError("network down")
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError, match="network down"):
+        post_json("https://api.openai.com/v1/chat/completions", payload, "key")
+
+
+def test_chunk_lines_requires_positive_size():
+    with pytest.raises(ValueError, match="chunk size must be positive"):
+        list(chunk_lines(["a", "b"], 0))
+
+
+def test_parse_classified_items_rejects_non_list_payload():
+    with pytest.raises(ValueError, match="LLM response must be a list"):
+        parse_classified_items('{"items":{"bad":"shape"}}')

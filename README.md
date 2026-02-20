@@ -24,6 +24,20 @@ Validate:
 italki-anki --help
 ```
 
+## Fastest start (recommended)
+
+If you already have API keys/credentials set up, this is the daily command:
+
+```bash
+~/Chinese/italkiAnki/.venv/bin/italki-anki --interactive --openai --audio --out-dir ~/Chinese/output --run-mode both
+```
+
+Why this command:
+- uses OpenAI classification (`--openai`) to reduce noisy cards,
+- generates audio (`--audio`),
+- keeps latest files for Anki add-on import,
+- archives each run (`--run-mode both`).
+
 ## Primary workflow (interactive)
 
 ```bash
@@ -142,6 +156,26 @@ italki-anki --interactive --out-dir "$HOME/Chinese/output" --run-mode latest
 italki-anki --interactive --out-dir "$HOME/Chinese/output" --run-mode archive
 ```
 
+## CLI flags reference
+
+Input source (choose one):
+- `--interactive`: open `$EDITOR` and paste text.
+- `--stdin`: read text from standard input.
+- `--input PATH`: read text from a file.
+
+Core output/lifecycle:
+- `--out-dir PATH`: output root directory (default: `output`).
+- `--run-mode latest|archive|both`: output lifecycle mode (default: `both`).
+
+Classification:
+- `--openai`: use OpenAI classifier (recommended).
+- no `--openai`: use offline stub heuristic classifier (fast, noisier).
+- `--seed INT`: deterministic randomness for measure-word number selection and repeatability.
+
+Card generation:
+- `--audio`: generate audio via Amazon Polly.
+- `--max-cloze-len INT`: soft chunk size for cloze splitting (default: `8`).
+
 ## Optional: Anki add-on (one-click latest import)
 
 An add-on is included at:
@@ -160,16 +194,22 @@ Configurable path is in the add-on config (`output_dir`, default `~/Chinese/outp
 
 ## Testing
 
-Pytest:
+Primary test workflow (Bazel):
 
 ```bash
-.venv/bin/pytest -q
+.tools/bin/bazel test //:all_tests
 ```
 
-Bazel test target:
+Equivalent direct target:
 
 ```bash
 .tools/bin/bazel test //:unit_tests
+```
+
+Optional local pytest loop:
+
+```bash
+.venv/bin/pytest -q
 ```
 
 ## Bazel build
@@ -178,6 +218,12 @@ Build CLI target:
 
 ```bash
 .tools/bin/bazel build //:italki_anki_cli
+```
+
+Run CLI via Bazel:
+
+```bash
+.tools/bin/bazel run //:italki_anki_cli -- --interactive --openai --audio --out-dir "$HOME/Chinese/output" --run-mode both
 ```
 
 ## Behavior notes
