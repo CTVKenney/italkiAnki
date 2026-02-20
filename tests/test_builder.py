@@ -60,3 +60,21 @@ def test_social_chatter_sentence_is_filtered_before_classification(tmp_path):
     assert result.cloze_count == 0
     assert not (output_dir / "vocab_cards.csv").exists()
     assert not (output_dir / "cloze_cards.csv").exists()
+
+
+def test_build_from_text_reports_progress_messages(tmp_path):
+    output_dir = tmp_path / "out"
+    updates: list[str] = []
+    build_from_text(
+        "书房\nstudy\n",
+        StubClient(),
+        NullAudioProvider(output_dir=str(output_dir)),
+        str(output_dir),
+        BuildConfig(),
+        status=updates.append,
+    )
+    assert updates[0] == "Parsing input text"
+    assert "Found 1 candidate Chinese lines" in updates
+    assert "Classifying candidate lines" in updates
+    assert "Writing CSV output files" in updates
+    assert updates[-1].startswith("Finished: ")

@@ -7,11 +7,13 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from typing import Sequence
+import time
+from typing import Callable, Sequence
 
 from .builder import build_from_text, pick_audio_provider
 from .cards import BuildConfig
 from .llm import LLMClient, StubClient, openai_client_from_env
+from .runs import RunMode, create_run_context, publish_latest_artifacts, write_latest_run_manifest
 
 
 DEFAULT_EDITOR = "vi"
@@ -72,8 +74,23 @@ def select_llm(args: argparse.Namespace) -> LLMClient:
     return StubClient()
 
 
+def build_status_reporter() -> tuple[Callable[[str], None], Callable[[], float]]:
+    started = time.monotonic()
+    state = {"step": 0}
+
+    def report(message: str) -> None:
+        state["step"] += 1
+        elapsed = time.monotonic() - started
+        print(f"[{state['step']}] {message} ({elapsed:.1f}s)", file=sys.stderr)
+
+    def elapsed_seconds() -> float:
+        return time.monotonic() - started
+
+    return report, elapsed_seconds
+
+
 def build_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
-    output_dir = Path(args.out_dir)
+    output_root = Path(args.out_dir)
     text = resolve_input_text(args, parser)
     if not text.strip():
         parser.error("input is empty")
@@ -84,13 +101,61 @@ def build_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
         include_audio=args.audio,
     )
 
-    audio = pick_audio_provider(output_dir=str(output_dir / "audio"), include_audio=args.audio)
+    run_mode: RunMode = args.run_mode
+    run_context = create_run_context(output_root, run_mode)
+    audio = pick_audio_provider(
+        output_dir=str(run_context.build_dir / "audio"),
+        include_audio=args.audio,
+    )
+    status_reporter, elapsed_seconds = build_status_reporter()
     llm = select_llm(args)
+    if args.openai:
+        status_reporter("Classifier: OpenAI")
+    else:
+        status_reporter("Classifier: stub heuristic (--openai disabled; output may be noisy)")
+    status_reporter(f"Run ID: {run_context.run_id}")
+    status_reporter(f"Run mode: {run_context.run_mode}")
+    status_reporter(f"Build output directory: {run_context.build_dir}")
 
-    result = build_from_text(text, llm, audio, str(output_dir), config)
+    result = build_from_text(
+        text,
+        llm,
+        audio,
+        str(run_context.build_dir),
+        config,
+        status=status_reporter,
+    )
+    published_latest = run_context.run_mode in {"latest", "both"}
+    if run_context.run_mode == "both":
+        status_reporter("Publishing latest artifacts")
+        publish_latest_artifacts(
+            run_context.build_dir,
+            run_context.output_root,
+            include_audio=args.audio,
+        )
+    manifest_path = write_latest_run_manifest(
+        run_context,
+        vocab_count=result.vocab_count,
+        cloze_count=result.cloze_count,
+        include_audio=args.audio,
+        published_latest=published_latest,
+    )
+    status_reporter(f"Wrote run manifest: {manifest_path}")
+
+    if run_context.run_mode == "archive":
+        destination = run_context.build_dir
+        destination_label = "archive run"
+    elif run_context.run_mode == "both":
+        destination = run_context.output_root
+        destination_label = "latest output (archive also written)"
+    else:
+        destination = run_context.output_root
+        destination_label = "latest output"
     print(
         f"Wrote {result.vocab_count} vocab cards and "
-        f"{result.cloze_count} cloze notes to {output_dir}"
+        f"{result.cloze_count} cloze notes to {destination} "
+        f"({destination_label}) "
+        f"in {elapsed_seconds():.1f}s"
     )
     return 0
 
@@ -116,6 +181,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a UTF-8 text file containing raw chat text.",
     )
     parser.add_argument("--out-dir", default="output", help="Output directory")
+    parser.add_argument(
+        "--run-mode",
+        choices=("latest", "archive", "both"),
+        default="both",
+        help=(
+            "Output lifecycle mode: latest=overwrite root files, "
+            "archive=write timestamped run only, both=archive and publish root files"
+        ),
+    )
     parser.add_argument("--seed", type=int, default=None, help="Deterministic randomness")
     audio_group = parser.add_mutually_exclusive_group()
     audio_group.add_argument(

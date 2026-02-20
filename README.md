@@ -64,6 +64,12 @@ The tool writes:
 - `cloze_cards.csv`
 - `audio/` (only when `--audio` is enabled)
 
+By default (`--run-mode both`) it also archives each run under:
+- `runs/<run_id>/...`
+
+and writes a manifest:
+- `latest_run.json`
+
 ## OpenAI setup (`--openai`)
 
 Required:
@@ -114,6 +120,43 @@ italki-anki --interactive --audio --out-dir output
 ```bash
 italki-anki --interactive --openai --audio --out-dir "$HOME/Chinese/italki-output"
 ```
+
+## Multi-run behavior
+
+Use `--run-mode` to control output lifecycle:
+
+- `both` (default): write a timestamped archive run and publish root files for one-click Anki import.
+- `latest`: only write/overwrite root files.
+- `archive`: only write timestamped run files (no root CSV overwrite).
+
+Examples:
+
+```bash
+# default behavior (best for Anki add-on + history)
+italki-anki --interactive --out-dir "$HOME/Chinese/output" --run-mode both
+
+# only overwrite latest files
+italki-anki --interactive --out-dir "$HOME/Chinese/output" --run-mode latest
+
+# only archive
+italki-anki --interactive --out-dir "$HOME/Chinese/output" --run-mode archive
+```
+
+## Optional: Anki add-on (one-click latest import)
+
+An add-on is included at:
+
+`anki_addon/italki_latest_importer`
+
+Install by copying that folder to your Anki add-ons directory:
+
+`~/.local/share/Anki2/addons21/italki_latest_importer`
+
+Then restart Anki and use:
+
+`Tools -> Import Latest italki Cards`
+
+Configurable path is in the add-on config (`output_dir`, default `~/Chinese/output`).
 
 ## Testing
 

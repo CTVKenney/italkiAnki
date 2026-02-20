@@ -1,0 +1,9 @@
+{
+  "output_dir": "~/Chinese/output",
+  "vocab_filename": "vocab_cards.csv",
+  "cloze_filename": "cloze_cards.csv",
+  "audio_subdir": "audio",
+  "import_vocab": true,
+  "import_cloze": true,
+  "copy_audio": true
+}

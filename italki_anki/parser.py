@@ -7,6 +7,10 @@ from .models import RawLine
 
 URL_RE = re.compile(r"https?://\S+")
 TIMESTAMP_RE = re.compile(r"^\s*\d{1,2}:\d{2}(?::\d{2})?\s*$")
+MONTH_TIMESTAMP_RE = re.compile(
+    r"^\s*(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\s+\d{1,2}\s+\d{1,2}:\d{2}\s*(am|pm)\s*$",
+    re.IGNORECASE,
+)
 EMOJI_ONLY_RE = re.compile(r"^[\W_]+$")
 LATIN_ONLY_RE = re.compile(r"^[A-Za-z0-9\s'\-.,!?]+$")
 SPACE_RE = re.compile(r"\s+")
@@ -35,6 +39,8 @@ NOISE_LABELS = {
     "录音",
     "课文",
     "音频",
+    "上一个 下一个",
+    "上一个下一个",
 }
 
 CHANNEL_BRANDS = {
@@ -46,6 +52,11 @@ CHANNEL_BRANDS = {
     "wechat",
     "xiaohongshu",
     "youtube",
+    "maomi chinese",
+    "teatime chinese",
+    "mandarin corner",
+    "chinese colloquialised",
+    "nathan rao",
 }
 
 METADATA_KEYWORDS = (
@@ -54,6 +65,15 @@ METADATA_KEYWORDS = (
     "podcast",
     "transcript",
 )
+METADATA_SUBSTRINGS = (
+    "lesson summary",
+    "go check it out",
+    "view details",
+    "lesson starts in",
+    "free talk with chinese",
+    "without textbook",
+)
+SPEAKER_LABEL_RE = re.compile(r"^\s*(老师|老師|学生|學生|teacher|student)\s*[:：]")
 
 SOCIAL_GRATITUDE = ("谢谢", "謝謝", "感谢", "感謝", "多谢", "多謝")
 SOCIAL_TEACHER = ("老师", "老師")
@@ -77,7 +97,7 @@ def normalize_line(line: str) -> str:
 
 def canonical_text(line: str) -> str:
     lowered = line.strip().lower()
-    lowered = lowered.strip("[]【】()（）{}<>《》\"'`*_-:：|")
+    lowered = lowered.strip("[]【】()（）{}<>《》\"'`*_-:：|^")
     return SPACE_RE.sub(" ", lowered)
 
 
@@ -95,6 +115,8 @@ def looks_like_title_case_channel_name(line: str) -> bool:
 
 
 def is_metadata_line(line: str) -> bool:
+    if line.lstrip().startswith("^"):
+        return True
     canonical = canonical_text(line)
     if not canonical:
         return True
@@ -104,9 +126,16 @@ def is_metadata_line(line: str) -> bool:
         return True
     if canonical.startswith(("transcript ", "audio ", "channel ")):
         return True
+    if any(fragment in canonical for fragment in METADATA_SUBSTRINGS):
+        return True
+    if "mandarin" in canonical and "minutes" in canonical:
+        return True
     if any(keyword in canonical for keyword in METADATA_KEYWORDS):
         return is_latin_only(line)
     if looks_like_title_case_channel_name(line):
+        return True
+    words = [token for token in canonical.split() if token]
+    if len(words) >= 2 and canonical.endswith(" chinese"):
         return True
     return False
 
@@ -154,6 +183,10 @@ def is_social_chatter_line(line: str) -> bool:
 def is_noise_line(line: str) -> bool:
     if not line:
         return True
+    if SPEAKER_LABEL_RE.match(line):
+        return True
+    if MONTH_TIMESTAMP_RE.match(line):
+        return True
     if TIMESTAMP_RE.match(line):
         return True
     if URL_RE.search(line):
@@ -177,6 +210,28 @@ def is_chinese_line(line: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff]", line))
 
 
+def is_gloss_candidate(line: str) -> bool:
+    if not is_latin_only(line):
+        return False
+    canonical = canonical_text(line)
+    if not canonical:
+        return False
+    if is_metadata_line(line):
+        return False
+    words = [token for token in canonical.split() if token]
+    if not words or len(words) > 6:
+        return False
+    if len(words) >= 2 and canonical.endswith(" chinese"):
+        return False
+    return True
+
+
+def should_keep_candidate(line: RawLine) -> bool:
+    if not is_chinese_line(line.text):
+        return False
+    return True
+
+
 def parse_lines(lines: Iterable[str]) -> List[RawLine]:
     cleaned: List[str] = []
     for line in lines:
@@ -188,12 +243,12 @@ def parse_lines(lines: Iterable[str]) -> List[RawLine]:
     raw_lines: List[RawLine] = []
     latin_buffer: List[int] = []
     for idx, line in enumerate(cleaned):
-        if is_latin_only(line) and not is_chinese_line(line):
+        if is_gloss_candidate(line) and not is_chinese_line(line):
             latin_buffer.append(idx)
         raw_lines.append(RawLine(text=line))
 
     attached = attach_glosses(raw_lines, latin_buffer)
-    chinese_lines = [item for item in attached if is_chinese_line(item.text)]
+    chinese_lines = [item for item in attached if should_keep_candidate(item)]
     return dedupe_chinese_lines(chinese_lines)
 
 

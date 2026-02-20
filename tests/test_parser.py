@@ -50,3 +50,41 @@ def test_filters_teacher_signoff_chatter_in_chinese_and_english():
     assert len(lines) == 1
     assert lines[0].text == "书房"
     assert lines[0].gloss == "study"
+
+
+def test_keeps_long_unglossed_chinese_line():
+    text = "今天我们要讨论一个非常复杂的话题然后再做总结"
+    lines = parse_lines(text.splitlines())
+    assert [line.text for line in lines] == [text]
+
+
+def test_filters_speaker_label_lines():
+    text = "老师：今天我们继续。\n学生：好的。"
+    lines = parse_lines(text.splitlines())
+    assert lines == []
+
+
+def test_filters_month_timestamp_and_lesson_metadata():
+    text = "\n".join(
+        [
+            "合同",
+            "Feb 14 04:00 PM",
+            "The lesson summary is ready for this lesson. Go check it out!",
+            "View details",
+            "Feb 16 01:30 PM",
+            "Lesson starts in 30 mins.",
+            "申请",
+        ]
+    )
+    lines = parse_lines(text.splitlines())
+    assert [line.text for line in lines] == ["合同", "申请"]
+
+
+def test_filters_channel_like_latin_lines_from_gloss_attachment():
+    text = "中文俗语\nmaomi chinese\nteatime chinese\n申请\napply"
+    lines = parse_lines(text.splitlines())
+    assert len(lines) == 2
+    assert lines[0].text == "中文俗语"
+    assert lines[0].gloss is None
+    assert lines[1].text == "申请"
+    assert lines[1].gloss == "apply"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -66,3 +67,60 @@ def test_main_handles_runtime_errors_without_traceback(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "OPENAI_API_KEY is not set" in captured.err
+
+
+def test_default_run_mode_writes_latest_and_archive(monkeypatch, tmp_path):
+    monkeypatch.setattr("italki_anki.cli.read_text_from_editor", lambda initial_text="": "书房\nstudy\n")
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["--interactive", "--out-dir", str(output_dir)])
+
+    assert exit_code == 0
+    assert (output_dir / "vocab_cards.csv").exists()
+    manifest = json.loads((output_dir / "latest_run.json").read_text(encoding="utf-8"))
+    assert manifest["run_mode"] == "both"
+    assert manifest["published_latest"] is True
+    run_dir = output_dir / "runs" / manifest["run_id"]
+    assert (run_dir / "vocab_cards.csv").exists()
+    assert (run_dir / "cloze_cards.csv").exists()
+
+
+def test_run_mode_latest_writes_only_root_files(monkeypatch, tmp_path):
+    monkeypatch.setattr("italki_anki.cli.read_text_from_editor", lambda initial_text="": "书房\nstudy\n")
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["--interactive", "--out-dir", str(output_dir), "--run-mode", "latest"])
+
+    assert exit_code == 0
+    assert (output_dir / "vocab_cards.csv").exists()
+    assert not (output_dir / "runs").exists()
+    manifest = json.loads((output_dir / "latest_run.json").read_text(encoding="utf-8"))
+    assert manifest["run_mode"] == "latest"
+    assert manifest["published_latest"] is True
+
+
+def test_run_mode_archive_writes_only_run_directory(monkeypatch, tmp_path):
+    monkeypatch.setattr("italki_anki.cli.read_text_from_editor", lambda initial_text="": "书房\nstudy\n")
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["--interactive", "--out-dir", str(output_dir), "--run-mode", "archive"])
+
+    assert exit_code == 0
+    assert not (output_dir / "vocab_cards.csv").exists()
+    manifest = json.loads((output_dir / "latest_run.json").read_text(encoding="utf-8"))
+    assert manifest["run_mode"] == "archive"
+    assert manifest["published_latest"] is False
+    run_dir = output_dir / "runs" / manifest["run_id"]
+    assert (run_dir / "vocab_cards.csv").exists()
+    assert (run_dir / "cloze_cards.csv").exists()
+
+
+def test_cli_emits_stub_classifier_warning_when_openai_disabled(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr("italki_anki.cli.read_text_from_editor", lambda initial_text="": "书房\nstudy\n")
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["--interactive", "--out-dir", str(output_dir)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Classifier: stub heuristic" in captured.err
