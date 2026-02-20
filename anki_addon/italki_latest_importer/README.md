@@ -6,8 +6,10 @@ This add-on adds a Tools menu action in Anki:
 
 When clicked, it:
 - reads card CSVs from your configured output directory,
-- starts Anki CSV imports for available files,
+- starts Anki CSV imports for available files (one dialog per file, with `vocab`/`cloze` status toasts),
 - copies new audio files into Anki's media folder.
+
+The add-on strips the known CSV header rows before invoking Anki import, so header labels are not imported as notes.
 
 ## Install
 

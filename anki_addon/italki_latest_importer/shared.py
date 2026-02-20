@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,6 +11,10 @@ DEFAULT_VOCAB_FILENAME = "vocab_cards.csv"
 DEFAULT_CLOZE_FILENAME = "cloze_cards.csv"
 DEFAULT_AUDIO_SUBDIR = "audio"
 AUDIO_EXTENSIONS = (".mp3", ".m4a", ".wav", ".ogg")
+KNOWN_HEADER_ROWS = {
+    ("English", "Pinyin", "Simplified", "Traditional", "Audio"),
+    ("Text",),
+}
 
 
 @dataclass(frozen=True)
@@ -92,3 +97,22 @@ def copy_audio_files(audio_dir: Path, media_dir: Path) -> int:
         shutil.copy2(source, target)
         copied += 1
     return copied
+
+
+def prepare_import_csv(path: Path) -> Path:
+    if not path.exists() or not path.is_file():
+        return path
+    with open(path, newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        first_row = next(reader, None)
+        if first_row is None:
+            return path
+        normalized_first_row = tuple(cell.strip() for cell in first_row)
+        if normalized_first_row not in KNOWN_HEADER_ROWS:
+            return path
+        import_path = path.with_name(f".{path.stem}.anki_import{path.suffix}")
+        with open(import_path, "w", newline="", encoding="utf-8") as import_handle:
+            writer = csv.writer(import_handle)
+            for row in reader:
+                writer.writerow(row)
+        return import_path

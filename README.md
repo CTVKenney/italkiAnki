@@ -186,11 +186,23 @@ Install by copying that folder to your Anki add-ons directory:
 
 `~/.local/share/Anki2/addons21/italki_latest_importer`
 
+Or, for active development, symlink it so edits are picked up immediately:
+
+```bash
+mkdir -p ~/.local/share/Anki2/addons21
+ln -sfn ~/Chinese/italkiAnki/anki_addon/italki_latest_importer ~/.local/share/Anki2/addons21/italki_latest_importer
+```
+
 Then restart Anki and use:
 
 `Tools -> Import Latest italki Cards`
 
 Configurable path is in the add-on config (`output_dir`, default `~/Chinese/output`).
+
+Import behavior notes:
+- If both CSVs exist, Anki opens two import dialogs: first vocab, then cloze.
+- The add-on shows a status toast (`Import 1/2: vocab ...`, `Import 2/2: cloze ...`) so it is clear which file is being imported.
+- Known CSV header rows are stripped before import, so header labels are not imported as notes.
 
 ## Testing
 

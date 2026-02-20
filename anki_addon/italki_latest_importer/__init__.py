@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .shared import AddonConfig, copy_audio_files, planned_import_targets, resolve_output_paths, split_existing_targets
+from .shared import (
+    AddonConfig,
+    copy_audio_files,
+    planned_import_targets,
+    prepare_import_csv,
+    resolve_output_paths,
+    split_existing_targets,
+)
 
 
 def _show_info(message: str) -> None:
@@ -15,6 +22,15 @@ def _show_warning(message: str) -> None:
     from aqt.utils import showWarning
 
     showWarning(message)
+
+
+def _show_status(message: str) -> None:
+    try:
+        from aqt.utils import tooltip
+
+        tooltip(message)
+    except Exception:
+        _show_info(message)
 
 
 def _import_csv(mw, path: Path) -> None:
@@ -56,11 +72,17 @@ def _import_latest_cards() -> None:
         return
 
     imported_count = 0
-    for _, path in existing:
-        _import_csv(mw, path)
+    imported_labels: list[str] = []
+    for index, (label, path) in enumerate(existing, start=1):
+        import_path = prepare_import_csv(path)
+        _show_status(f"Import {index}/{len(existing)}: {label} cards ({path.name})")
+        _import_csv(mw, import_path)
         imported_count += 1
+        imported_labels.append(f"{label} ({path.name})")
 
     details = [f"Started import for {imported_count} file(s)."]
+    if imported_labels:
+        details.append(f"Import order: {', '.join(imported_labels)}.")
     if copied_audio:
         details.append(f"Copied {copied_audio} audio file(s) into Anki media.")
     if missing:

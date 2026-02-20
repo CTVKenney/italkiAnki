@@ -75,6 +75,7 @@ def test_openai_payload_has_noise_and_measure_word_guardrails():
     payload = build_openai_payload(["面"], model="gpt-4o-mini", seed=None)
     system_prompt = payload["messages"][0]["content"]
     assert "social pleasantries" in system_prompt
+    assert "hello/ni hao/你好/你好吗" in system_prompt
     assert "include a common measure_word" in system_prompt
 
 

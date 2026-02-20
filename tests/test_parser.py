@@ -88,3 +88,20 @@ def test_filters_channel_like_latin_lines_from_gloss_attachment():
     assert lines[0].gloss is None
     assert lines[1].text == "申请"
     assert lines[1].gloss == "apply"
+
+
+def test_filters_basic_greeting_lines():
+    text = "\n".join(
+        [
+            "你好",
+            "Hello",
+            "你好吗？",
+            "ni hao",
+            "合同",
+            "contract",
+        ]
+    )
+    lines = parse_lines(text.splitlines())
+    assert len(lines) == 1
+    assert lines[0].text == "合同"
+    assert lines[0].gloss == "contract"

@@ -78,3 +78,18 @@ def test_build_from_text_reports_progress_messages(tmp_path):
     assert "Classifying candidate lines" in updates
     assert "Writing CSV output files" in updates
     assert updates[-1].startswith("Finished: ")
+
+
+def test_basic_greeting_lines_are_filtered_before_classification(tmp_path):
+    output_dir = tmp_path / "out"
+    result = build_from_text(
+        "你好\nhello\n",
+        StubClient(),
+        NullAudioProvider(output_dir=str(output_dir)),
+        str(output_dir),
+        BuildConfig(),
+    )
+    assert result.vocab_count == 0
+    assert result.cloze_count == 0
+    assert not (output_dir / "vocab_cards.csv").exists()
+    assert not (output_dir / "cloze_cards.csv").exists()

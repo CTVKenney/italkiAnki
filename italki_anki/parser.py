@@ -20,10 +20,25 @@ GREETINGS = {
     "hi",
     "hello",
     "hey",
+    "nihao",
+    "ni hao",
     "谢谢",
     "老师好",
     "早上好",
     "晚上好",
+}
+
+BASIC_CHINESE_SMALL_TALK = {
+    "你好",
+    "您好",
+    "你好吗",
+    "你好嗎",
+    "你们好",
+    "你們好",
+    "大家好",
+    "哈喽",
+    "哈囉",
+    "嗨",
 }
 
 NOISE_LABELS = {
@@ -180,6 +195,13 @@ def is_social_chatter_line(line: str) -> bool:
     return False
 
 
+def is_basic_small_talk_line(line: str) -> bool:
+    compact = chinese_compact_text(line)
+    if compact in BASIC_CHINESE_SMALL_TALK:
+        return True
+    return False
+
+
 def is_noise_line(line: str) -> bool:
     if not line:
         return True
@@ -190,6 +212,8 @@ def is_noise_line(line: str) -> bool:
     if TIMESTAMP_RE.match(line):
         return True
     if URL_RE.search(line):
+        return True
+    if is_basic_small_talk_line(line):
         return True
     if is_social_chatter_line(line):
         return True

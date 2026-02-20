@@ -6,6 +6,7 @@ from anki_addon.italki_latest_importer.shared import (
     AddonConfig,
     copy_audio_files,
     planned_import_targets,
+    prepare_import_csv,
     resolve_output_paths,
     split_existing_targets,
 )
@@ -61,3 +62,26 @@ def test_copy_audio_files_copies_new_audio_only(tmp_path):
     assert (media_dir / "a.mp3").exists()
     assert (media_dir / "b.wav").read_bytes() == b"old"
     assert not (media_dir / "ignore.txt").exists()
+
+
+def test_prepare_import_csv_strips_known_header_row(tmp_path):
+    source = tmp_path / "vocab_cards.csv"
+    source.write_text(
+        "English,Pinyin,Simplified,Traditional,Audio\nbook,shu,书,書,[sound:a.mp3]\n",
+        encoding="utf-8",
+    )
+
+    import_path = prepare_import_csv(source)
+
+    assert import_path != source
+    assert import_path.name == ".vocab_cards.anki_import.csv"
+    assert import_path.read_text(encoding="utf-8").startswith("book,shu,书,書")
+
+
+def test_prepare_import_csv_keeps_unknown_first_row(tmp_path):
+    source = tmp_path / "custom.csv"
+    source.write_text("word,reading\nbook,shu\n", encoding="utf-8")
+
+    import_path = prepare_import_csv(source)
+
+    assert import_path == source
