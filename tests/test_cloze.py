@@ -13,3 +13,16 @@ def test_variable_length_cloze_segmentation():
     assert all(len(chunk) <= 4 for chunk in lines.simplified_chunks[:-1])
     assert len(lines.simplified_chunks) == len(lines.traditional_chunks)
     assert len(lines.simplified_chunks) == len(lines.pinyin_chunks)
+
+
+def test_pinyin_alignment_respects_sentence_boundaries():
+    lines = build_cloze_lines(
+        english="Thank you, teacher! See you next time.",
+        simplified="感谢老师！下次见",
+        traditional="感謝老師！下次見",
+        pinyin="gǎn xiè lǎo shī! xià cì jiàn",
+        max_len=8,
+    )
+    assert lines.simplified_chunks == ["感谢老师！", "下次见"]
+    assert lines.traditional_chunks == ["感謝老師！", "下次見"]
+    assert lines.pinyin_chunks == ["gǎn xiè lǎo shī!", "xià cì jiàn"]

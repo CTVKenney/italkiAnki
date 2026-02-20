@@ -93,8 +93,13 @@ def build_openai_payload(lines: Sequence[str], model: str, seed: int | None) -> 
         "{\"items\": [ ... ]}. Each item must contain: item_type "
         "(vocabulary|grammar|sentence), simplified, traditional, pinyin "
         "(tone marked), english. Optional: gloss, measure_word, "
-        "measure_word_pinyin. Classify each input line and remove noise. "
-        "If a line contains a gloss in parentheses, treat it as guidance."
+        "measure_word_pinyin. Exclude non-study noise such as channel names, "
+        "labels like transcript/audio, timestamps, platform brands, speaker "
+        "tags, social pleasantries (thanks/farewell to teacher), and other "
+        "chat small talk. If uncertain, omit the item. Do not infer or invent "
+        "measure words; only include measure_word fields when that measure "
+        "word appears explicitly in the same input line. If a line contains a "
+        "gloss in parentheses, treat it as guidance."
     )
     user_prompt = "Lines:\n" + "\n".join(f"- {line}" for line in lines)
     payload: dict = {
@@ -134,6 +139,7 @@ def post_json(url: str, payload: dict, api_key: str) -> dict:
     max_retries = 6
     retryable_statuses = {429, 500, 502, 503}
     last_error: int | None = None
+    last_error_detail = ""
     for attempt in range(max_retries + 1):
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
@@ -146,12 +152,12 @@ def post_json(url: str, payload: dict, api_key: str) -> dict:
             body_text = ""
             if exc.fp is not None:
                 body_text = exc.fp.read().decode("utf-8", errors="ignore")
+            detail = summarize_openai_error_body(body_text)
+            if detail:
+                last_error_detail = detail
             if exc.code not in retryable_statuses:
-                message = body_text.strip()[:200]
-                if message:
-                    raise RuntimeError(
-                        f"OpenAI request failed: {exc.code} {message}"
-                    ) from exc
+                if detail:
+                    raise RuntimeError(f"OpenAI request failed: {exc.code} {detail}") from exc
                 raise RuntimeError(f"OpenAI request failed: {exc.code}") from exc
             if attempt >= max_retries:
                 break
@@ -166,8 +172,50 @@ def post_json(url: str, payload: dict, api_key: str) -> dict:
             last_error = None
             raise RuntimeError(f"OpenAI request failed: {exc.reason}") from exc
     if last_error is not None:
+        if last_error == 429:
+            base = (
+                "OpenAI request failed after retries: 429 "
+                "(rate limit or insufficient quota). "
+                "Check account usage/billing and retry."
+            )
+            if last_error_detail:
+                return_detail = f"{base} Last error: {last_error_detail}"
+                raise RuntimeError(return_detail)
+            raise RuntimeError(base)
+        if last_error_detail:
+            raise RuntimeError(
+                f"OpenAI request failed after retries: {last_error} {last_error_detail}"
+            )
         raise RuntimeError(f"OpenAI request failed after retries: {last_error}")
     raise RuntimeError("OpenAI request failed after retries")
+
+
+def summarize_openai_error_body(body_text: str) -> str:
+    cleaned = body_text.strip()
+    if not cleaned:
+        return ""
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return cleaned[:200]
+    if not isinstance(payload, dict):
+        return cleaned[:200]
+    error = payload.get("error")
+    if not isinstance(error, dict):
+        return cleaned[:200]
+    parts: list[str] = []
+    err_type = error.get("type")
+    if isinstance(err_type, str) and err_type.strip():
+        parts.append(err_type.strip())
+    err_code = error.get("code")
+    if isinstance(err_code, str) and err_code.strip() and err_code.strip() not in parts:
+        parts.append(err_code.strip())
+    message = error.get("message")
+    if isinstance(message, str) and message.strip():
+        parts.append(message.strip())
+    if not parts:
+        return cleaned[:200]
+    return " | ".join(parts)[:200]
 
 
 def chunk_lines(lines: Sequence[str], size: int) -> Iterable[List[str]]:

@@ -1,3 +1,8 @@
+[build-system]
+requires = []
+build-backend = "build_backend"
+backend-path = ["."]
+
 [project]
 name = "italki-anki"
 version = "0.1.0"
@@ -5,6 +10,7 @@ description = "CLI tool to convert Chinese lesson text into Anki CSVs"
 requires-python = ">=3.10"
 
 [project.scripts]
+italki-anki = "italki_anki.cli:main"
 italki_anki = "italki_anki.cli:main"
 
 [tool.pytest.ini_options]

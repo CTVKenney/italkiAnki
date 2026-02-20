@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
 from typing import Iterable, List
 
 from .models import ClozeLines
 
 PUNCTUATION = set("，。？！；、,.?!")
+CHINESE_CHAR_RE = re.compile(r"[\u4e00-\u9fff]")
 
 
 PINYIN_NUMBERS = {
@@ -60,6 +62,10 @@ def align_pinyin_chunks(pinyin: str, sizes: Iterable[int]) -> List[str]:
     return result
 
 
+def count_chinese_chars(text: str) -> int:
+    return len(CHINESE_CHAR_RE.findall(text))
+
+
 def build_cloze_lines(
     english: str,
     simplified: str,
@@ -69,8 +75,11 @@ def build_cloze_lines(
 ) -> ClozeLines:
     simplified_chunks = segment_text(simplified, max_len)
     sizes = [len(chunk) for chunk in simplified_chunks]
+    pinyin_sizes = [count_chinese_chars(chunk) for chunk in simplified_chunks]
+    if sum(pinyin_sizes) == 0:
+        pinyin_sizes = sizes
     traditional_chunks = align_chunks(traditional, sizes)
-    pinyin_chunks = align_pinyin_chunks(pinyin, sizes)
+    pinyin_chunks = align_pinyin_chunks(pinyin, pinyin_sizes)
     return ClozeLines(
         english=english,
         simplified_chunks=simplified_chunks,

@@ -1,0 +1,27 @@
+load("@pip//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+
+py_library(
+    name = "italki_anki_lib",
+    srcs = glob(["italki_anki/*.py"]),
+    imports = ["."],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "italki_anki_cli",
+    srcs = ["italki_anki/cli.py"],
+    main = "italki_anki/cli.py",
+    deps = [":italki_anki_lib"],
+)
+
+py_test(
+    name = "unit_tests",
+    srcs = glob(["tests/*.py"]),
+    main = "tests/pytest_main.py",
+    deps = [
+        ":italki_anki_lib",
+        requirement("pytest"),
+    ],
+    imports = ["."],
+)

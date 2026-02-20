@@ -45,3 +45,18 @@ def test_stub_sentence_omits_empty_pinyin_line(tmp_path):
     assert len(non_empty_lines) == 2
     empty_cloze_pattern = re.compile(r"^\{\{c\d+::\}\}$")
     assert all(not empty_cloze_pattern.match(line.strip()) for line in non_empty_lines)
+
+
+def test_social_chatter_sentence_is_filtered_before_classification(tmp_path):
+    output_dir = tmp_path / "out"
+    result = build_from_text(
+        "感谢老师！下次见\nThank you, teacher! See you next time.\n",
+        StubClient(),
+        NullAudioProvider(output_dir=str(output_dir)),
+        str(output_dir),
+        BuildConfig(),
+    )
+    assert result.vocab_count == 0
+    assert result.cloze_count == 0
+    assert not (output_dir / "vocab_cards.csv").exists()
+    assert not (output_dir / "cloze_cards.csv").exists()

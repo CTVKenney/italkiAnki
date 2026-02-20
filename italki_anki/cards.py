@@ -11,6 +11,18 @@ from .cloze import PINYIN_NUMBERS, build_cloze_lines, render_cloze_lines
 from .models import ClassifiedItem, ClozeNote, ItemType, VocabCard
 
 DEGREE_PREFIXES = ("太",)
+HANZI_NUMBERS = {
+    1: "一",
+    2: "二",
+    3: "三",
+    4: "四",
+    5: "五",
+    6: "六",
+    7: "七",
+    8: "八",
+    9: "九",
+    10: "十",
+}
 
 
 @dataclass
@@ -37,14 +49,14 @@ def apply_measure_word(
 ) -> tuple[str, str, str]:
     if not measure_word:
         return simplified, traditional, pinyin
-
     if measure_word == "个":
         return simplified, traditional, pinyin
 
     number = rng.randint(1, 10)
+    number_hanzi = HANZI_NUMBERS.get(number, str(number))
     number_pinyin = PINYIN_NUMBERS.get(number, str(number))
-    prefix_simplified = f"{number}{measure_word}"
-    prefix_traditional = f"{number}{measure_word}"
+    prefix_simplified = f"{number_hanzi}{measure_word}"
+    prefix_traditional = f"{number_hanzi}{measure_word}"
     prefix_pinyin = f"{number_pinyin} {measure_word_pinyin or measure_word}"
     return (
         f"{prefix_simplified}{simplified}",

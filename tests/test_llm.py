@@ -5,7 +5,13 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 import urllib.error
 
-from italki_anki.llm import OpenAIClient, StubClient, parse_classified_items, post_json
+from italki_anki.llm import (
+    OpenAIClient,
+    StubClient,
+    build_openai_payload,
+    parse_classified_items,
+    post_json,
+)
 
 
 def test_parse_classified_items_with_envelope():
@@ -63,6 +69,13 @@ def test_stub_client_strips_parenthetical_gloss():
     assert items[0].simplified == "书房"
 
 
+def test_openai_payload_has_noise_and_measure_word_guardrails():
+    payload = build_openai_payload(["面"], model="gpt-4o-mini", seed=None)
+    system_prompt = payload["messages"][0]["content"]
+    assert "social pleasantries" in system_prompt
+    assert "Do not infer or invent measure words" in system_prompt
+
+
 def test_post_json_retries_on_rate_limit(monkeypatch):
     payload = {"model": "gpt-4o-mini"}
     response_payload = {"choices": [{"message": {"content": "{\"items\": []}"}}]}
@@ -95,3 +108,32 @@ def test_post_json_retries_on_rate_limit(monkeypatch):
     assert result == response_payload
     assert calls["count"] == 3
     assert sleeps == [1, 2]
+
+
+def test_post_json_429_after_retries_has_actionable_message(monkeypatch):
+    payload = {"model": "gpt-4o-mini"}
+    quota_body = (
+        b'{"error":{"message":"You exceeded your current quota.","type":"insufficient_quota",'
+        b'"code":"insufficient_quota"}}'
+    )
+
+    def fake_urlopen(request, timeout=60):
+        raise urllib.error.HTTPError(
+            request.full_url,
+            429,
+            "rate limit",
+            None,
+            io.BytesIO(quota_body),
+        )
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("random.random", lambda: 0.0)
+    monkeypatch.setattr("time.sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        post_json("https://api.openai.com/v1/chat/completions", payload, "key")
+
+    message = str(exc_info.value)
+    assert "429" in message
+    assert "insufficient quota" in message
+    assert "insufficient_quota" in message

@@ -49,3 +49,5 @@ def test_deterministic_measure_word_prefix():
     cards_b = build_vocab_cards([item], NullAudioProvider(output_dir="."), config)
     assert cards_a[0].simplified == cards_b[0].simplified
     assert cards_a[0].pinyin == cards_b[0].pinyin
+    assert not any(char.isdigit() for char in cards_a[0].simplified)
+    assert cards_a[0].simplified[0] in "一二三四五六七八九十"
