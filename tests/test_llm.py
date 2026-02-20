@@ -73,7 +73,7 @@ def test_openai_payload_has_noise_and_measure_word_guardrails():
     payload = build_openai_payload(["面"], model="gpt-4o-mini", seed=None)
     system_prompt = payload["messages"][0]["content"]
     assert "social pleasantries" in system_prompt
-    assert "Do not infer or invent measure words" in system_prompt
+    assert "include a common measure_word" in system_prompt
 
 
 def test_post_json_retries_on_rate_limit(monkeypatch):

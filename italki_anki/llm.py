@@ -96,10 +96,11 @@ def build_openai_payload(lines: Sequence[str], model: str, seed: int | None) -> 
         "measure_word_pinyin. Exclude non-study noise such as channel names, "
         "labels like transcript/audio, timestamps, platform brands, speaker "
         "tags, social pleasantries (thanks/farewell to teacher), and other "
-        "chat small talk. If uncertain, omit the item. Do not infer or invent "
-        "measure words; only include measure_word fields when that measure "
-        "word appears explicitly in the same input line. If a line contains a "
-        "gloss in parentheses, treat it as guidance."
+        "chat small talk. If uncertain, omit the item. For concrete countable "
+        "nouns, include a common measure_word and measure_word_pinyin when you "
+        "are confident, even if not explicit in the line. If unsure, leave "
+        "measure_word fields empty. If a line contains a gloss in parentheses, "
+        "treat it as guidance."
     )
     user_prompt = "Lines:\n" + "\n".join(f"- {line}" for line in lines)
     payload: dict = {

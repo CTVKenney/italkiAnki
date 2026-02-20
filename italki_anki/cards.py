@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import os
 import random
+import re
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Sequence
 
@@ -22,6 +23,18 @@ HANZI_NUMBERS = {
     8: "八",
     9: "九",
     10: "十",
+}
+ENGLISH_NUMBERS = {
+    1: "One",
+    2: "Two",
+    3: "Three",
+    4: "Four",
+    5: "Five",
+    6: "Six",
+    7: "Seven",
+    8: "Eight",
+    9: "Nine",
+    10: "Ten",
 }
 
 
@@ -46,11 +59,11 @@ def apply_measure_word(
     measure_word: Optional[str],
     measure_word_pinyin: Optional[str],
     rng: random.Random,
-) -> tuple[str, str, str]:
+) -> tuple[str, str, str, Optional[int]]:
     if not measure_word:
-        return simplified, traditional, pinyin
+        return simplified, traditional, pinyin, None
     if measure_word == "个":
-        return simplified, traditional, pinyin
+        return simplified, traditional, pinyin, None
 
     number = rng.randint(1, 10)
     number_hanzi = HANZI_NUMBERS.get(number, str(number))
@@ -62,7 +75,28 @@ def apply_measure_word(
         f"{prefix_simplified}{simplified}",
         f"{prefix_traditional}{traditional}",
         f"{prefix_pinyin} {pinyin}",
+        number,
     )
+
+
+def pluralize_english_word(word: str) -> str:
+    lower = word.lower()
+    if lower.endswith(("s", "x", "z", "ch", "sh")):
+        return f"{word}es"
+    if lower.endswith("y") and len(word) > 1 and lower[-2] not in "aeiou":
+        return f"{word[:-1]}ies"
+    return f"{word}s"
+
+
+def build_counted_english(english: str, number: int) -> str:
+    normalized = english.strip()
+    if not normalized:
+        return normalized
+    normalized = re.sub(r"^(a|an)\s+", "", normalized, flags=re.IGNORECASE)
+    if " " not in normalized and normalized.isalpha():
+        normalized = pluralize_english_word(normalized)
+    number_word = ENGLISH_NUMBERS.get(number, str(number))
+    return f"{number_word} {normalized}"
 
 
 def build_vocab_cards(
@@ -78,7 +112,7 @@ def build_vocab_cards(
         simplified = strip_degree_prefix(item.simplified)
         traditional = strip_degree_prefix(item.traditional)
         pinyin = strip_degree_prefix(item.pinyin)
-        simplified, traditional, pinyin = apply_measure_word(
+        simplified, traditional, pinyin, number = apply_measure_word(
             simplified,
             traditional,
             pinyin,
@@ -86,13 +120,16 @@ def build_vocab_cards(
             item.measure_word_pinyin,
             rng,
         )
+        english = item.english
+        if number is not None:
+            english = build_counted_english(english, number)
         audio_tag = ""
         if config.include_audio:
             filename = audio.create_audio(simplified)
             audio_tag = f"[sound:{filename}]"
         cards.append(
             VocabCard(
-                english=item.english,
+                english=english,
                 pinyin=pinyin,
                 simplified=simplified,
                 traditional=traditional,

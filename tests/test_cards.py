@@ -32,6 +32,7 @@ def test_measure_word_exception_for_ge():
         BuildConfig(seed=3),
     )
     assert cards[0].simplified == "水瓶"
+    assert cards[0].english == "water bottle"
 
 
 def test_deterministic_measure_word_prefix():
@@ -51,3 +52,6 @@ def test_deterministic_measure_word_prefix():
     assert cards_a[0].pinyin == cards_b[0].pinyin
     assert not any(char.isdigit() for char in cards_a[0].simplified)
     assert cards_a[0].simplified[0] in "一二三四五六七八九十"
+    assert cards_a[0].english == cards_b[0].english
+    assert cards_a[0].english.startswith("Two ")
+    assert cards_a[0].english.endswith("carrots")
