@@ -1,0 +1,6 @@
+# Terms in this list are excluded from generated vocabulary cards by default.
+# One term per line. Lines starting with # are comments.
+
+大学
+现在
+没关系

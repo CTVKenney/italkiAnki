@@ -4,6 +4,7 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 py_library(
     name = "italki_anki_lib",
     srcs = glob(["italki_anki/*.py"]),
+    data = ["italki_anki/known_terms.txt"],
     deps = [
         requirement("boto3"),
     ],

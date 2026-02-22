@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from italki_anki.cli import main, read_text_from_editor
+from italki_anki.known_terms import normalize_known_term
 
 
 def test_interactive_mode_builds_csv_output(monkeypatch, tmp_path):
@@ -124,3 +125,19 @@ def test_cli_emits_stub_classifier_warning_when_openai_disabled(monkeypatch, tmp
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "Classifier: stub heuristic" in captured.err
+
+
+def test_cli_applies_loaded_known_terms(monkeypatch, tmp_path):
+    monkeypatch.setattr("italki_anki.cli.read_text_from_editor", lambda initial_text="": "书房\nstudy\n合同\n")
+    monkeypatch.setattr(
+        "italki_anki.cli.load_known_terms",
+        lambda: {normalize_known_term("书房")},
+    )
+    output_dir = tmp_path / "out"
+
+    exit_code = main(["--interactive", "--out-dir", str(output_dir)])
+
+    assert exit_code == 0
+    with open(output_dir / "vocab_cards.csv", newline="", encoding="utf-8") as handle:
+        vocab_rows = list(csv.reader(handle))
+    assert [row[2] for row in vocab_rows[1:]] == ["合同"]

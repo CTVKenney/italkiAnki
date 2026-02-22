@@ -4,6 +4,7 @@ import re
 from italki_anki.audio import NullAudioProvider
 from italki_anki.builder import build_from_text
 from italki_anki.cards import BuildConfig
+from italki_anki.known_terms import normalize_known_term
 from italki_anki.llm import StubClient
 
 
@@ -93,3 +94,26 @@ def test_basic_greeting_lines_are_filtered_before_classification(tmp_path):
     assert result.cloze_count == 0
     assert not (output_dir / "vocab_cards.csv").exists()
     assert not (output_dir / "cloze_cards.csv").exists()
+
+
+def test_known_terms_filter_excludes_only_matching_vocab(tmp_path):
+    output_dir = tmp_path / "out"
+    result = build_from_text(
+        "大学\n现在\n合同\n",
+        StubClient(),
+        NullAudioProvider(output_dir=str(output_dir)),
+        str(output_dir),
+        BuildConfig(),
+        known_terms={
+            normalize_known_term("大学"),
+            normalize_known_term("现在"),
+        },
+    )
+    assert result.vocab_count == 1
+    assert result.cloze_count == 0
+
+    with open(output_dir / "vocab_cards.csv", newline="", encoding="utf-8") as handle:
+        rows = list(csv.reader(handle))
+    assert rows[0] == ["English", "Pinyin", "Simplified", "Traditional", "Audio"]
+    assert len(rows) == 2
+    assert rows[1][2] == "合同"

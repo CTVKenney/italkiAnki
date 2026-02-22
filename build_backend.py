@@ -77,7 +77,11 @@ def _dist_info_members() -> List[Tuple[str, bytes]]:
 def _package_members() -> List[Tuple[str, bytes]]:
     package_root = PROJECT_ROOT / PACKAGE_NAME
     members: List[Tuple[str, bytes]] = []
-    for path in sorted(package_root.rglob("*.py")):
+    for path in sorted(package_root.rglob("*")):
+        if not path.is_file():
+            continue
+        if path.suffix not in {".py", ".txt"}:
+            continue
         relative = path.relative_to(PROJECT_ROOT).as_posix()
         members.append((relative, path.read_bytes()))
     return members

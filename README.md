@@ -6,6 +6,7 @@ The tool:
 - takes raw pasted chat text,
 - filters obvious noise (metadata, labels, channel names, social sign-offs),
 - classifies items into vocab/grammar/sentence cards,
+- excludes terms listed in the default known-terms list,
 - writes CSV output for Anki import,
 - can optionally generate audio with Amazon Polly.
 
@@ -176,6 +177,17 @@ Card generation:
 - `--audio`: generate audio via Amazon Polly.
 - `--max-cloze-len INT`: soft chunk size for cloze splitting (default: `8`).
 
+## Known Terms (default-on filtering)
+
+The tool loads `italki_anki/known_terms.txt` automatically on every run and excludes matching vocab entries by default.
+
+Default seeded examples include:
+- `大学`
+- `现在`
+- `没关系`
+
+To customize, edit that file (one term per line, `#` for comments).
+
 ## Optional: Anki add-on (one-click latest import)
 
 An add-on is included at:
@@ -224,6 +236,22 @@ Optional local pytest loop:
 .venv/bin/pytest -q
 ```
 
+Optional live Polly pronunciation integration test (off by default):
+
+```bash
+export ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1
+export OPENAI_API_KEY='sk-...'
+# optional; defaults to us-east-1
+export AWS_DEFAULT_REGION='us-east-1'
+# optional override; default is gpt-4o-audio-preview
+export OPENAI_AUDIO_EVAL_MODEL='gpt-4o-audio-preview'
+.tools/bin/bazel test //:unit_tests --test_env=ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1 --test_env=OPENAI_API_KEY --test_env=OPENAI_AUDIO_EVAL_MODEL --test_env=AWS_DEFAULT_REGION --test_env=HOME
+```
+
+Notes:
+- This test makes live API calls to both AWS Polly and OpenAI.
+- It is skipped unless `ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1` is set.
+
 ## Bazel build
 
 Build CLI target:
@@ -242,5 +270,7 @@ Run CLI via Bazel:
 
 - Parser uses deterministic filtering first.
 - Teacher-chat sign-offs (for example, thanks/farewell lines) are treated as noise.
+- Basic small-talk greetings (for example, `你好` / `hello`) are filtered.
+- Vocab in `italki_anki/known_terms.txt` is excluded by default.
 - Measure-word examples are randomized with Chinese numerals (`一`..`十`) rather than Arabic digits.
 - Cloze pinyin chunking is aligned with Chinese chunk boundaries for better sentence consistency.

@@ -12,6 +12,7 @@ from typing import Callable, Sequence
 
 from .builder import build_from_text, pick_audio_provider
 from .cards import BuildConfig
+from .known_terms import default_known_terms_path, load_known_terms
 from .llm import LLMClient, StubClient, openai_client_from_env
 from .runs import RunMode, create_run_context, publish_latest_artifacts, write_latest_run_manifest
 
@@ -116,6 +117,10 @@ def build_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
     status_reporter(f"Run ID: {run_context.run_id}")
     status_reporter(f"Run mode: {run_context.run_mode}")
     status_reporter(f"Build output directory: {run_context.build_dir}")
+    known_terms = load_known_terms()
+    status_reporter(
+        f"Known terms loaded: {len(known_terms)} from {default_known_terms_path()}"
+    )
 
     result = build_from_text(
         text,
@@ -123,6 +128,7 @@ def build_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> 
         audio,
         str(run_context.build_dir),
         config,
+        known_terms=known_terms,
         status=status_reporter,
     )
     published_latest = run_context.run_mode in {"latest", "both"}

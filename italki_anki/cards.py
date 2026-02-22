@@ -125,7 +125,7 @@ def build_vocab_cards(
             english = build_counted_english(english, number)
         audio_tag = ""
         if config.include_audio:
-            filename = audio.create_audio(simplified)
+            filename = audio.create_audio(simplified, pinyin=pinyin)
             audio_tag = f"[sound:{filename}]"
         cards.append(
             VocabCard(
