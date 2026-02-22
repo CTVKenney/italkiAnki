@@ -23,6 +23,9 @@ py_test(
     name = "unit_tests",
     srcs = glob(["tests/*.py"]),
     main = "tests/pytest_main.py",
+    env = {
+        "ITALKI_TEST_RUNNER": "bazel",
+    },
     deps = [
         ":italki_anki_lib",
         requirement("pytest"),

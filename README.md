@@ -230,11 +230,7 @@ Equivalent direct target:
 .tools/bin/bazel test //:unit_tests
 ```
 
-Optional local pytest loop:
-
-```bash
-.venv/bin/pytest -q
-```
+Direct `pytest` invocation is intentionally blocked. Run tests only through Bazel.
 
 Optional live Polly pronunciation integration test (off by default):
 
