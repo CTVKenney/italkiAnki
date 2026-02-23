@@ -6,7 +6,9 @@ This add-on adds a Tools menu action in Anki:
 
 When clicked, it:
 - reads card CSVs from your configured output directory,
-- starts Anki CSV imports for available files (one dialog per file, with `vocab`/`cloze` status toasts),
+- deduplicates incoming rows by card key (`Simplified` for vocab, `Text` for cloze),
+- applies import mode (`add-only` or `overwrite`) against existing notes,
+- starts Anki CSV imports for remaining rows (one dialog per file, with `vocab`/`cloze` status toasts),
 - copies new audio files into Anki's media folder.
 
 The add-on strips the known CSV header rows before invoking Anki import, so header labels are not imported as notes.
@@ -38,6 +40,16 @@ Default config:
   "audio_subdir": "audio",
   "import_vocab": true,
   "import_cloze": true,
-  "copy_audio": true
+  "copy_audio": true,
+  "import_mode": "add-only"
 }
 ```
+
+`import_mode` behavior:
+- `add-only`: skip rows whose card key already exists in your collection.
+- `overwrite`: delete existing notes for incoming keys, then import new rows (replaces prior incorrect variants and removes duplicates for those keys).
+
+Deleted-card memory:
+- When you delete a supported italki card in Anki, the add-on records its key.
+- Future imports skip rows with keys previously deleted by you.
+- Stored at `<output_dir>/.anki_deleted_keys.json`.

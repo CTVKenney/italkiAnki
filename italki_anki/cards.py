@@ -36,6 +36,7 @@ ENGLISH_NUMBERS = {
     9: "Nine",
     10: "Ten",
 }
+SPACE_RE = re.compile(r"\s+")
 
 
 @dataclass
@@ -139,6 +140,44 @@ def build_vocab_cards(
     return cards
 
 
+def vocab_card_key(card: VocabCard) -> str:
+    return SPACE_RE.sub("", card.simplified).strip()
+
+
+def vocab_card_quality_score(card: VocabCard) -> tuple[int, int]:
+    non_empty = sum(
+        1
+        for value in (
+            card.english.strip(),
+            card.pinyin.strip(),
+            card.simplified.strip(),
+            card.traditional.strip(),
+            card.audio.strip(),
+        )
+        if value
+    )
+    richness = len(card.pinyin.strip()) + len(card.english.strip()) + len(card.audio.strip())
+    return non_empty, richness
+
+
+def dedupe_vocab_cards(cards: Sequence[VocabCard]) -> List[VocabCard]:
+    deduped: List[VocabCard] = []
+    key_to_index: dict[str, int] = {}
+    for card in cards:
+        key = vocab_card_key(card)
+        if not key:
+            continue
+        existing_index = key_to_index.get(key)
+        if existing_index is None:
+            key_to_index[key] = len(deduped)
+            deduped.append(card)
+            continue
+        existing = deduped[existing_index]
+        if vocab_card_quality_score(card) >= vocab_card_quality_score(existing):
+            deduped[existing_index] = card
+    return deduped
+
+
 def build_cloze_notes(
     items: Sequence[ClassifiedItem],
     config: BuildConfig,
@@ -170,6 +209,28 @@ def build_cloze_notes(
         rendered_lines = render_cloze_lines(cloze_lines)
         notes.append(ClozeNote(text="\n".join(rendered_lines)))
     return notes
+
+
+def cloze_note_key(note: ClozeNote) -> str:
+    return SPACE_RE.sub(" ", note.text).strip()
+
+
+def dedupe_cloze_notes(notes: Sequence[ClozeNote]) -> List[ClozeNote]:
+    deduped: List[ClozeNote] = []
+    key_to_index: dict[str, int] = {}
+    for note in notes:
+        key = cloze_note_key(note)
+        if not key:
+            continue
+        existing_index = key_to_index.get(key)
+        if existing_index is None:
+            key_to_index[key] = len(deduped)
+            deduped.append(note)
+            continue
+        existing = deduped[existing_index]
+        if len(note.text) >= len(existing.text):
+            deduped[existing_index] = note
+    return deduped
 
 
 def is_stub_grammar_item(item: ClassifiedItem) -> bool:

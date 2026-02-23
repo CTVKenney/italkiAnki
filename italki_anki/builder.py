@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from typing import Callable, List, Set
 
 from .audio import AudioProvider, NullAudioProvider, PollyAudioProvider
-from .cards import BuildConfig, build_cloze_notes, build_vocab_cards, write_cloze_csv, write_vocab_csv
+from .cards import (
+    BuildConfig,
+    build_cloze_notes,
+    build_vocab_cards,
+    dedupe_cloze_notes,
+    dedupe_vocab_cards,
+    write_cloze_csv,
+    write_vocab_csv,
+)
 from .llm import LLMClient
 from .models import ClassifiedItem, ItemType
 from .known_terms import normalize_known_term
@@ -47,8 +55,8 @@ def build_from_text(
     if known_terms:
         emit_status(status, f"Dropped {known_terms_dropped} known/basic vocab items")
     emit_status(status, "Building vocab and cloze cards")
-    vocab_cards = build_vocab_cards(classified, audio, config)
-    cloze_notes = build_cloze_notes(classified, config)
+    vocab_cards = dedupe_vocab_cards(build_vocab_cards(classified, audio, config))
+    cloze_notes = dedupe_cloze_notes(build_cloze_notes(classified, config))
     emit_status(status, "Writing CSV output files")
     write_vocab_csv(vocab_cards, f"{output_dir}/vocab_cards.csv")
     write_cloze_csv(cloze_notes, f"{output_dir}/cloze_cards.csv")
@@ -101,15 +109,35 @@ def classify_lines(
 
 
 def dedupe_items(items: List[ClassifiedItem]) -> List[ClassifiedItem]:
-    seen = set()
-    deduped = []
+    deduped: List[ClassifiedItem] = []
+    key_to_index: dict[tuple[ItemType, str], int] = {}
     for item in items:
-        key = item.simplified.strip()
-        if key in seen:
+        key = (item.item_type, item.simplified.strip())
+        existing_index = key_to_index.get(key)
+        if existing_index is None:
+            key_to_index[key] = len(deduped)
+            deduped.append(item)
             continue
-        seen.add(key)
-        deduped.append(item)
+        existing = deduped[existing_index]
+        if item_quality_score(item) >= item_quality_score(existing):
+            deduped[existing_index] = item
     return deduped
+
+
+def item_quality_score(item: ClassifiedItem) -> tuple[int, int]:
+    non_empty = sum(
+        1
+        for value in (
+            item.english.strip(),
+            item.pinyin.strip(),
+            item.gloss.strip() if item.gloss else "",
+            item.measure_word.strip() if item.measure_word else "",
+            item.measure_word_pinyin.strip() if item.measure_word_pinyin else "",
+        )
+        if value
+    )
+    richness = len(item.english.strip()) + len(item.pinyin.strip())
+    return non_empty, richness
 
 
 def pick_audio_provider(output_dir: str, include_audio: bool) -> AudioProvider:

@@ -1,4 +1,4 @@
-from italki_anki.cards import BuildConfig, build_vocab_cards
+from italki_anki.cards import BuildConfig, ClozeNote, VocabCard, build_vocab_cards, dedupe_cloze_notes, dedupe_vocab_cards
 from italki_anki.models import ClassifiedItem, ItemType
 from italki_anki.audio import NullAudioProvider
 
@@ -55,3 +55,39 @@ def test_deterministic_measure_word_prefix():
     assert cards_a[0].english == cards_b[0].english
     assert cards_a[0].english.startswith("Two ")
     assert cards_a[0].english.endswith("carrots")
+
+
+def test_dedupe_vocab_cards_prefers_richer_duplicate():
+    cards = [
+        VocabCard(
+            english="",
+            pinyin="",
+            simplified="长假",
+            traditional="長假",
+            audio="",
+        ),
+        VocabCard(
+            english="long holiday",
+            pinyin="chang2 jia4",
+            simplified="长假",
+            traditional="長假",
+            audio="[sound:a.mp3]",
+        ),
+    ]
+
+    deduped = dedupe_vocab_cards(cards)
+
+    assert len(deduped) == 1
+    assert deduped[0].pinyin == "chang2 jia4"
+    assert deduped[0].audio == "[sound:a.mp3]"
+
+
+def test_dedupe_cloze_notes_drops_duplicate_text():
+    notes = [
+        ClozeNote(text="{{c1::你好}}\n{{c2::老师}}"),
+        ClozeNote(text="{{c1::你好}}\n{{c2::老师}}"),
+    ]
+
+    deduped = dedupe_cloze_notes(notes)
+
+    assert len(deduped) == 1

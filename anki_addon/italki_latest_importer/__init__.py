@@ -4,12 +4,23 @@ from pathlib import Path
 
 from .shared import (
     AddonConfig,
+    append_deleted_keys,
     copy_audio_files,
+    dedupe_import_rows,
+    existing_key_index,
+    filter_rows_by_import_mode,
+    filter_rows_by_deleted_keys,
+    keys_for_note_ids,
+    load_deleted_keys,
+    read_data_rows,
+    remove_note_ids,
     planned_import_targets,
-    prepare_import_csv,
     resolve_output_paths,
     split_existing_targets,
+    write_import_rows,
 )
+
+_SUPPRESS_DELETE_TRACKING = 0
 
 
 def _show_info(message: str) -> None:
@@ -45,6 +56,41 @@ def _import_csv(mw, path: Path) -> None:
     raise RuntimeError("Unable to find a compatible Anki CSV import function")
 
 
+def _tracking_base_dir(mw) -> Path:
+    config = AddonConfig.from_dict(mw.addonManager.getConfig(__name__))
+    return resolve_output_paths(config).base_dir
+
+
+def _install_delete_tracking(mw) -> None:
+    col = getattr(mw, "col", None)
+    if col is None:
+        return
+    if getattr(col, "_italki_delete_tracking_installed", False):
+        return
+
+    installed = False
+    for method_name in ("remove_notes", "remNotes"):
+        original = getattr(col, method_name, None)
+        if not callable(original):
+            continue
+
+        def wrapped(note_ids, *args, __original=original, **kwargs):
+            global _SUPPRESS_DELETE_TRACKING
+            if _SUPPRESS_DELETE_TRACKING > 0:
+                return __original(note_ids, *args, **kwargs)
+            keys = keys_for_note_ids(col, note_ids)
+            result = __original(note_ids, *args, **kwargs)
+            if keys["vocab"] or keys["cloze"]:
+                append_deleted_keys(_tracking_base_dir(mw), keys)
+            return result
+
+        setattr(col, method_name, wrapped)
+        installed = True
+
+    if installed:
+        setattr(col, "_italki_delete_tracking_installed", True)
+
+
 def _import_latest_cards() -> None:
     from aqt import mw
 
@@ -52,10 +98,13 @@ def _import_latest_cards() -> None:
         _show_warning("Open an Anki profile/collection first.")
         return
 
+    _install_delete_tracking(mw)
+
     config = AddonConfig.from_dict(mw.addonManager.getConfig(__name__))
     paths = resolve_output_paths(config)
     planned = planned_import_targets(config, paths)
     existing, missing = split_existing_targets(planned)
+    deleted_keys = load_deleted_keys(paths.base_dir)
 
     copied_audio = 0
     if config.copy_audio:
@@ -73,16 +122,63 @@ def _import_latest_cards() -> None:
 
     imported_count = 0
     imported_labels: list[str] = []
+    skipped_existing_rows = 0
+    skipped_deleted_rows = 0
+    deduped_rows = 0
+    deleted_notes = 0
+    skipped_empty_files: list[str] = []
     for index, (label, path) in enumerate(existing, start=1):
-        import_path = prepare_import_csv(path)
-        _show_status(f"Import {index}/{len(existing)}: {label} cards ({path.name})")
+        rows = read_data_rows(path)
+        rows, removed_duplicate_rows = dedupe_import_rows(label, rows)
+        deduped_rows += removed_duplicate_rows
+        rows, removed_deleted_rows = filter_rows_by_deleted_keys(
+            label=label,
+            rows=rows,
+            deleted_keys=deleted_keys.get(label, set()),
+        )
+        skipped_deleted_rows += removed_deleted_rows
+
+        key_index = existing_key_index(mw.col, label)
+        rows, skipped_rows, note_ids_to_remove = filter_rows_by_import_mode(
+            label=label,
+            rows=rows,
+            mode=config.import_mode,
+            key_index=key_index,
+        )
+        skipped_existing_rows += skipped_rows
+
+        if note_ids_to_remove:
+            global _SUPPRESS_DELETE_TRACKING
+            _SUPPRESS_DELETE_TRACKING += 1
+            try:
+                deleted_notes += remove_note_ids(mw.col, note_ids_to_remove)
+            finally:
+                _SUPPRESS_DELETE_TRACKING -= 1
+
+        if not rows:
+            skipped_empty_files.append(f"{label} ({path.name})")
+            continue
+
+        import_path = write_import_rows(path, rows)
+        _show_status(f"Import {index}/{len(existing)}: {label} cards ({path.name}) [{config.import_mode}]")
         _import_csv(mw, import_path)
         imported_count += 1
         imported_labels.append(f"{label} ({path.name})")
 
     details = [f"Started import for {imported_count} file(s)."]
+    details.append(f"Import mode: {config.import_mode}.")
     if imported_labels:
         details.append(f"Import order: {', '.join(imported_labels)}.")
+    if deduped_rows:
+        details.append(f"Dropped {deduped_rows} duplicate CSV row(s) before import.")
+    if skipped_existing_rows:
+        details.append(f"Skipped {skipped_existing_rows} row(s) already present in collection.")
+    if skipped_deleted_rows:
+        details.append(f"Skipped {skipped_deleted_rows} row(s) previously deleted in Anki.")
+    if deleted_notes:
+        details.append(f"Deleted {deleted_notes} existing note(s) before overwrite import.")
+    if skipped_empty_files:
+        details.append(f"Skipped files with no rows to import: {', '.join(skipped_empty_files)}.")
     if copied_audio:
         details.append(f"Copied {copied_audio} audio file(s) into Anki media.")
     if missing:

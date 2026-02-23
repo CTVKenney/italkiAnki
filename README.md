@@ -210,11 +210,16 @@ Then restart Anki and use:
 `Tools -> Import Latest italki Cards`
 
 Configurable path is in the add-on config (`output_dir`, default `~/Chinese/output`).
+Import behavior mode is configurable with `import_mode`:
+- `add-only` (default): skip incoming rows that already exist in your collection.
+- `overwrite`: delete existing notes matching incoming keys, then import replacements.
 
 Import behavior notes:
 - If both CSVs exist, Anki opens two import dialogs: first vocab, then cloze.
 - The add-on shows a status toast (`Import 1/2: vocab ...`, `Import 2/2: cloze ...`) so it is clear which file is being imported.
 - Known CSV header rows are stripped before import, so header labels are not imported as notes.
+- Incoming CSV rows are deduplicated before import (`Simplified` key for vocab, `Text` key for cloze).
+- User-deleted cards are remembered and skipped on future imports via `<output_dir>/.anki_deleted_keys.json`.
 
 ## Testing
 

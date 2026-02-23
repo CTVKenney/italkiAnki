@@ -2,10 +2,11 @@ import csv
 import re
 
 from italki_anki.audio import NullAudioProvider
-from italki_anki.builder import build_from_text
+from italki_anki.builder import build_from_text, dedupe_items
 from italki_anki.cards import BuildConfig
 from italki_anki.known_terms import normalize_known_term
 from italki_anki.llm import StubClient
+from italki_anki.models import ClassifiedItem, ItemType
 
 
 def test_stub_grammar_builds_two_cloze_notes(tmp_path):
@@ -117,3 +118,28 @@ def test_known_terms_filter_excludes_only_matching_vocab(tmp_path):
     assert rows[0] == ["English", "Pinyin", "Simplified", "Traditional", "Audio"]
     assert len(rows) == 2
     assert rows[1][2] == "合同"
+
+
+def test_dedupe_items_prefers_richer_duplicate():
+    items = [
+        ClassifiedItem(
+            item_type=ItemType.VOCAB,
+            simplified="长假",
+            traditional="長假",
+            pinyin="",
+            english="",
+        ),
+        ClassifiedItem(
+            item_type=ItemType.VOCAB,
+            simplified="长假",
+            traditional="長假",
+            pinyin="cháng jià",
+            english="long holiday",
+        ),
+    ]
+
+    deduped = dedupe_items(items)
+
+    assert len(deduped) == 1
+    assert deduped[0].pinyin == "cháng jià"
+    assert deduped[0].english == "long holiday"
