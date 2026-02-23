@@ -6,7 +6,6 @@ The tool:
 - takes raw pasted chat text,
 - filters obvious noise (metadata, labels, channel names, social sign-offs),
 - classifies items into vocab/grammar/sentence cards,
-- excludes terms listed in the default known-terms list,
 - writes CSV output for Anki import,
 - can optionally generate audio with Amazon Polly.
 
@@ -241,17 +240,6 @@ Card generation:
 - `--audio`: generate audio via Amazon Polly.
 - `--max-cloze-len INT`: soft chunk size for cloze splitting (default: `8`).
 
-## Known Terms (default-on filtering)
-
-The tool loads `italki_anki/known_terms.txt` automatically on every run and excludes matching vocab entries by default.
-
-Default seeded examples include:
-- `大学`
-- `现在`
-- `没关系`
-
-To customize, edit that file (one term per line, `#` for comments).
-
 ## Optional: Anki add-on (one-click latest import)
 
 An add-on is included at:
@@ -334,6 +322,5 @@ Run CLI via Bazel:
 - Parser uses deterministic filtering first.
 - Teacher-chat sign-offs (for example, thanks/farewell lines) are treated as noise.
 - Basic small-talk greetings (for example, `你好` / `hello`) are filtered.
-- Vocab in `italki_anki/known_terms.txt` is excluded by default.
 - Measure-word examples are randomized with Chinese numerals (`一`..`十`) rather than Arabic digits.
 - Cloze pinyin chunking is aligned with Chinese chunk boundaries for better sentence consistency.

@@ -10,3 +10,4 @@ bazel-bin
 bazel-italkiAnki
 bazel-out
 bazel-testlogs
+anki_addon/italki_latest_importer/meta.json
