@@ -10,6 +10,70 @@ The tool:
 - writes CSV output for Anki import,
 - can optionally generate audio with Amazon Polly.
 
+## Easy Start (Idiot-Proof)
+
+Do this exactly:
+
+1. Clone and install once:
+
+```bash
+cd ~/Chinese
+git clone git@github.com:CTVKenney/italkiAnki.git
+cd italkiAnki
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+2. Set your API key once per shell:
+
+```bash
+export OPENAI_API_KEY='sk-...'
+```
+
+3. Generate cards (this opens your editor to paste lesson text):
+
+```bash
+~/Chinese/italkiAnki/.venv/bin/italki-anki --interactive --openai --audio --out-dir ~/Chinese/output --run-mode both
+```
+
+4. In Anki: `Tools -> Import Latest italki Cards`
+
+5. In each import dialog, set deck to:
+
+`General::汉语::italki`
+
+## Regenerate After Tone Improvements
+
+If you generated cards before the tone fixes, regenerate and re-import once in overwrite mode:
+
+1. Update repo:
+
+```bash
+cd ~/Chinese/italkiAnki
+git pull
+```
+
+2. In Anki add-on config, temporarily set:
+
+```json
+"import_mode": "overwrite"
+```
+
+3. Regenerate:
+
+```bash
+~/Chinese/italkiAnki/.venv/bin/italki-anki --interactive --openai --audio --out-dir ~/Chinese/output --run-mode both
+```
+
+4. Import from Anki menu: `Tools -> Import Latest italki Cards`
+
+5. Set add-on config back to:
+
+```json
+"import_mode": "add-only"
+```
+
 ## Install
 
 ```bash

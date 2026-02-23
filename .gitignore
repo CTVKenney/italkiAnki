@@ -1,0 +1,12 @@
+.coverage
+.pytest_cache/
+.tools/
+.venv/
+AGENTS.md
+MODULE.bazel.lock
+__pycache__/
+*/__pycache__/
+bazel-bin
+bazel-italkiAnki
+bazel-out
+bazel-testlogs

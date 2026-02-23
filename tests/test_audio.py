@@ -11,6 +11,7 @@ from italki_anki.audio import (
     PollyAudioProvider,
     build_polly_phoneme_ssml,
     deterministic_audio_filename,
+    normalize_pinyin_hint,
 )
 
 
@@ -31,6 +32,10 @@ def test_deterministic_audio_filename_includes_pronunciation_hint():
     base = deterministic_audio_filename("长假")
     hinted = deterministic_audio_filename("长假", pronunciation_hint="chángjià")
     assert base != hinted
+
+
+def test_normalize_pinyin_hint_converts_tone_marks_to_numbered_pinyin():
+    assert normalize_pinyin_hint("cháng jiǎ") == "chang2-jia3"
 
 
 def test_polly_audio_provider_skips_synthesis_when_file_exists(tmp_path, monkeypatch):
@@ -88,12 +93,12 @@ def test_polly_audio_provider_uses_ssml_phoneme_when_pinyin_present(tmp_path, mo
     fake_boto3 = SimpleNamespace(client=lambda service_name: FakeClient() if service_name == "polly" else None)
     monkeypatch.setitem(sys.modules, "boto3", fake_boto3)
 
-    filename = provider.create_audio("长假", pinyin="chángjià")
+    filename = provider.create_audio("长假", pinyin="cháng jià")
     output_path = tmp_path / filename
     assert output_path.exists()
     assert synth_calls and synth_calls[0]["TextType"] == "ssml"
     assert "x-amazon-pinyin" in synth_calls[0]["Text"]
-    assert 'ph="chángjià"' in synth_calls[0]["Text"]
+    assert 'ph="chang2-jia4"' in synth_calls[0]["Text"]
 
 
 def test_build_polly_phoneme_ssml_escapes_xml():
