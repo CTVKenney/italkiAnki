@@ -175,6 +175,11 @@ def test_addon_imports_existing_csv_and_copies_audio(monkeypatch, tmp_path):
     assert "Import mode: add-only." in info_messages[-1]
     assert "Import order: vocab (vocab_cards.csv), cloze (cloze_cards.csv)." in info_messages[-1]
     assert not deleted_ids
+    history_path = output_dir / ".anki_import_history.jsonl"
+    assert history_path.exists()
+    history_lines = history_path.read_text(encoding="utf-8").splitlines()
+    assert history_lines
+    assert '"imported_files": 2' in history_lines[-1]
 
 
 def test_addon_add_only_mode_skips_existing_vocab(monkeypatch, tmp_path):

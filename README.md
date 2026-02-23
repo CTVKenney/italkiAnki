@@ -279,6 +279,7 @@ Import behavior notes:
 - Incoming CSV rows are deduplicated before import (`Simplified` key for vocab, `Text` key for cloze).
 - User-deleted cards are remembered and skipped on future imports via `<output_dir>/.anki_deleted_keys.json`.
 - Imported note IDs are tracked in `<output_dir>/.anki_managed_notes.json` for safe overwrite behavior.
+- Each import appends a summary line to `<output_dir>/.anki_import_history.jsonl` (including estimated new cards).
 
 ## Testing
 

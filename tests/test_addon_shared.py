@@ -4,9 +4,11 @@ from pathlib import Path
 
 from anki_addon.italki_latest_importer.shared import (
     AddonConfig,
+    append_import_history,
     append_deleted_keys,
     append_managed_note_ids,
     collect_imported_note_ids_by_key,
+    count_cards_for_note_ids,
     copy_audio_files,
     dedupe_import_rows,
     existing_key_index,
@@ -272,6 +274,35 @@ def test_collect_imported_note_ids_by_key():
         key_index_after={"长假": [11, 21], "复习": [31]},
     )
     assert imported == {"长假": {21}, "复习": {31}}
+
+
+def test_count_cards_for_note_ids_uses_cards_table_count():
+    class FakeDB:
+        def all(self, query):
+            if "from cards where nid in (11,12)" in query:
+                return [(3,)]
+            return []
+
+    collection = type("FakeCollection", (), {"db": FakeDB()})()
+    assert count_cards_for_note_ids(collection, [11, 12]) == 3
+
+
+def test_append_import_history_writes_jsonl(tmp_path):
+    append_import_history(
+        tmp_path,
+        {
+            "import_mode": "add-only",
+            "imported_files": 2,
+            "estimated_new_cards": 17,
+        },
+    )
+
+    history_path = tmp_path / ".anki_import_history.jsonl"
+    lines = history_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert '"imported_files": 2' in lines[0]
+    assert '"estimated_new_cards": 17' in lines[0]
+    assert '"timestamp_utc":' in lines[0]
 
 
 def test_filter_rows_by_deleted_keys():

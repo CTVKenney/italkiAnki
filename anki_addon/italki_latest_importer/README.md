@@ -62,3 +62,7 @@ Deleted-card memory:
 Managed-note tracking:
 - Imported note IDs are tracked for safer overwrite matching.
 - Stored at `<output_dir>/.anki_managed_notes.json`.
+
+Import history:
+- Each import appends a machine-readable summary line to `<output_dir>/.anki_import_history.jsonl`.
+- Includes imported row counts and estimated new cards for that import run.

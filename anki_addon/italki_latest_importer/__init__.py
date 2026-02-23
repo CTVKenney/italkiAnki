@@ -4,8 +4,10 @@ from pathlib import Path
 
 from .shared import (
     AddonConfig,
+    append_import_history,
     append_deleted_keys,
     append_managed_note_ids,
+    count_cards_for_note_ids,
     collect_imported_note_ids_by_key,
     copy_audio_files,
     dedupe_import_rows,
@@ -135,6 +137,8 @@ def _import_latest_cards() -> None:
     deleted_notes = 0
     skipped_empty_files: list[str] = []
     tracked_new_notes = 0
+    new_note_ids: set[int] = set()
+    imported_rows_by_label: dict[str, int] = {}
     for index, (label, path) in enumerate(existing, start=1):
         rows = read_data_rows(path)
         rows, removed_duplicate_rows = dedupe_import_rows(label, rows)
@@ -175,6 +179,7 @@ def _import_latest_cards() -> None:
             skipped_empty_files.append(f"{label} ({path.name})")
             continue
 
+        imported_rows_by_label[label] = len(rows)
         key_index_before_import = existing_key_index(mw.col, label)
         import_path = write_import_rows(path, rows)
         _show_status(f"Import {index}/{len(existing)}: {label} cards ({path.name}) [{config.import_mode}]")
@@ -186,6 +191,8 @@ def _import_latest_cards() -> None:
             key_index_before=key_index_before_import,
             key_index_after=key_index_after_import,
         )
+        for note_ids in imported_note_ids_by_key.values():
+            new_note_ids.update(note_ids)
         tracked_new_notes += append_managed_note_ids(
             paths.base_dir,
             label=label,
@@ -194,6 +201,7 @@ def _import_latest_cards() -> None:
         imported_count += 1
         imported_labels.append(f"{label} ({path.name})")
 
+    tracked_new_cards = count_cards_for_note_ids(mw.col, new_note_ids)
     details = [f"Started import for {imported_count} file(s)."]
     details.append(f"Import mode: {config.import_mode}.")
     if config.import_mode == "overwrite":
@@ -214,12 +222,34 @@ def _import_latest_cards() -> None:
         details.append(f"Deleted {deleted_notes} existing note(s) before overwrite import.")
     if tracked_new_notes:
         details.append(f"Tracked {tracked_new_notes} imported note id(s) for safe future overwrite.")
+    if tracked_new_cards:
+        details.append(f"Estimated new cards added by this import: {tracked_new_cards}.")
     if skipped_empty_files:
         details.append(f"Skipped files with no rows to import: {', '.join(skipped_empty_files)}.")
     if copied_audio:
         details.append(f"Copied {copied_audio} audio file(s) into Anki media.")
     if missing:
         details.extend(f"Skipped missing {label}: {path.name}" for label, path in missing)
+
+    append_import_history(
+        paths.base_dir,
+        {
+            "import_mode": config.import_mode,
+            "overwrite_scope": config.overwrite_scope,
+            "imported_files": imported_count,
+            "imported_rows_by_label": imported_rows_by_label,
+            "skipped_existing_rows": skipped_existing_rows,
+            "protected_overwrite_rows": protected_overwrite_rows,
+            "skipped_deleted_rows": skipped_deleted_rows,
+            "deduped_rows": deduped_rows,
+            "deleted_notes": deleted_notes,
+            "tracked_new_notes": tracked_new_notes,
+            "estimated_new_cards": tracked_new_cards,
+            "copied_audio": copied_audio,
+            "missing_targets": [label for label, _path in missing],
+            "skipped_empty_files": skipped_empty_files,
+        },
+    )
     _show_info("\n".join(details))
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime, timezone
 import json
 import shutil
 from dataclasses import dataclass
@@ -25,6 +26,7 @@ VOCAB_FIELD_NAME = "Simplified"
 CLOZE_FIELD_NAME = "Text"
 DELETED_KEYS_FILENAME = ".anki_deleted_keys.json"
 MANAGED_NOTES_FILENAME = ".anki_managed_notes.json"
+IMPORT_HISTORY_FILENAME = ".anki_import_history.jsonl"
 
 
 @dataclass(frozen=True)
@@ -625,3 +627,53 @@ def filter_rows_by_import_mode(
             continue
         kept.append(row)
     return kept, skipped, []
+
+
+def count_cards_for_note_ids(collection: Any, note_ids: Iterable[int]) -> int:
+    ids = sorted({int(note_id) for note_id in note_ids})
+    if not ids:
+        return 0
+    db = getattr(collection, "db", None)
+    if db is None:
+        return 0
+    scalar = getattr(db, "scalar", None)
+    placeholders = ",".join(str(note_id) for note_id in ids)
+    query = f"select count(*) from cards where nid in ({placeholders})"
+    if callable(scalar):
+        try:
+            value = scalar(query)
+            return int(value or 0)
+        except Exception:
+            pass
+    all_rows = getattr(db, "all", None)
+    if not callable(all_rows):
+        return 0
+    try:
+        rows = all_rows(query)
+    except Exception:
+        return 0
+    if not rows:
+        return 0
+    first_row = rows[0]
+    if isinstance(first_row, (list, tuple)) and first_row:
+        try:
+            return int(first_row[0] or 0)
+        except (TypeError, ValueError):
+            return 0
+    try:
+        return int(first_row or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _import_history_path(base_dir: Path) -> Path:
+    return base_dir / IMPORT_HISTORY_FILENAME
+
+
+def append_import_history(base_dir: Path, event: dict[str, Any]) -> None:
+    base_dir.mkdir(parents=True, exist_ok=True)
+    payload = dict(event)
+    payload["timestamp_utc"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    line = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    with open(_import_history_path(base_dir), "a", encoding="utf-8") as handle:
+        handle.write(line + "\n")
