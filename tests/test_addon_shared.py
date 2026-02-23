@@ -5,6 +5,8 @@ from pathlib import Path
 from anki_addon.italki_latest_importer.shared import (
     AddonConfig,
     append_deleted_keys,
+    append_managed_note_ids,
+    collect_imported_note_ids_by_key,
     copy_audio_files,
     dedupe_import_rows,
     existing_key_index,
@@ -12,11 +14,15 @@ from anki_addon.italki_latest_importer.shared import (
     filter_rows_by_deleted_keys,
     keys_for_note_ids,
     load_deleted_keys,
+    load_managed_notes,
     normalize_import_mode,
+    normalize_overwrite_scope,
     planned_import_targets,
     prepare_import_csv,
+    remove_managed_note_ids,
     resolve_output_paths,
     save_deleted_keys,
+    save_managed_notes,
     split_existing_targets,
 )
 
@@ -27,12 +33,19 @@ def test_addon_config_defaults():
     assert config.vocab_filename == "vocab_cards.csv"
     assert config.copy_audio is True
     assert config.import_mode == "add-only"
+    assert config.overwrite_scope == "tracked-only"
 
 
 def test_normalize_import_mode():
     assert normalize_import_mode("overwrite") == "overwrite"
     assert normalize_import_mode("add-only") == "add-only"
     assert normalize_import_mode("unknown") == "add-only"
+
+
+def test_normalize_overwrite_scope():
+    assert normalize_overwrite_scope("tracked-only") == "tracked-only"
+    assert normalize_overwrite_scope("collection") == "collection"
+    assert normalize_overwrite_scope("unknown") == "tracked-only"
 
 
 def test_resolve_output_paths_expands_home(monkeypatch, tmp_path):
@@ -168,6 +181,34 @@ def test_filter_rows_by_import_mode_overwrite_collects_note_ids():
     assert note_ids == [11, 12]
 
 
+def test_filter_rows_by_import_mode_overwrite_protects_unmanaged_notes():
+    rows = [["long holiday", "cháng jià", "长假", "長假", ""]]
+    filtered, skipped, note_ids = filter_rows_by_import_mode(
+        label="vocab",
+        rows=rows,
+        mode="overwrite",
+        key_index={"长假": [11, 12]},
+        managed_note_ids_by_key={},
+    )
+    assert filtered == []
+    assert skipped == 1
+    assert note_ids == []
+
+
+def test_filter_rows_by_import_mode_overwrite_deletes_only_fully_managed_matches():
+    rows = [["long holiday", "cháng jià", "长假", "長假", ""]]
+    filtered, skipped, note_ids = filter_rows_by_import_mode(
+        label="vocab",
+        rows=rows,
+        mode="overwrite",
+        key_index={"长假": [11, 12]},
+        managed_note_ids_by_key={"长假": {11, 12}},
+    )
+    assert filtered == rows
+    assert skipped == 0
+    assert sorted(note_ids) == [11, 12]
+
+
 def test_deleted_keys_roundtrip(tmp_path):
     save_deleted_keys(
         tmp_path,
@@ -190,6 +231,47 @@ def test_append_deleted_keys_merges_and_dedupes(tmp_path):
     assert added_second == 2
     assert loaded["vocab"] == {"长假", "复习"}
     assert loaded["cloze"] == {"{{c1::你好}}"}
+
+
+def test_managed_notes_roundtrip(tmp_path):
+    save_managed_notes(
+        tmp_path,
+        {"vocab": {"长假": {11, 12}}, "cloze": {"{{c1::你好}}": {21}}},
+    )
+
+    loaded = load_managed_notes(tmp_path)
+
+    assert loaded["vocab"]["长假"] == {11, 12}
+    assert loaded["cloze"]["{{c1::你好}}"] == {21}
+
+
+def test_append_and_remove_managed_note_ids(tmp_path):
+    added = append_managed_note_ids(
+        tmp_path,
+        label="vocab",
+        note_ids_by_key={"长假": {11, 12}, "复习": {13}},
+    )
+    removed = remove_managed_note_ids(tmp_path, [12, 13])
+    loaded = load_managed_notes(tmp_path)
+
+    assert added == 3
+    assert removed == 2
+    assert loaded["vocab"]["长假"] == {11}
+    assert "复习" not in loaded["vocab"]
+
+
+def test_collect_imported_note_ids_by_key():
+    rows = [
+        ["long holiday", "cháng jià", "长假", "長假", ""],
+        ["review", "fùxí", "复习", "複習", ""],
+    ]
+    imported = collect_imported_note_ids_by_key(
+        label="vocab",
+        rows=rows,
+        key_index_before={"长假": [11], "复习": []},
+        key_index_after={"长假": [11, 21], "复习": [31]},
+    )
+    assert imported == {"长假": {21}, "复习": {31}}
 
 
 def test_filter_rows_by_deleted_keys():

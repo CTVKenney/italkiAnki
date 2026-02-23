@@ -56,7 +56,8 @@ git pull
 2. In Anki add-on config, temporarily set:
 
 ```json
-"import_mode": "overwrite"
+"import_mode": "overwrite",
+"overwrite_scope": "collection"
 ```
 
 3. Regenerate:
@@ -70,7 +71,8 @@ git pull
 5. Set add-on config back to:
 
 ```json
-"import_mode": "add-only"
+"import_mode": "add-only",
+"overwrite_scope": "tracked-only"
 ```
 
 ## Install
@@ -264,7 +266,11 @@ Then restart Anki and use:
 Configurable path is in the add-on config (`output_dir`, default `~/Chinese/output`).
 Import behavior mode is configurable with `import_mode`:
 - `add-only` (default): skip incoming rows that already exist in your collection.
-- `overwrite`: delete existing notes matching incoming keys, then import replacements.
+- `overwrite`: replace existing notes before import.
+
+Overwrite safety scope is configurable with `overwrite_scope`:
+- `tracked-only` (default): only overwrite notes tracked as imported by this add-on.
+- `collection`: overwrite all matching notes in the collection (legacy, destructive; use only if that keyspace is dedicated to italki imports).
 
 Import behavior notes:
 - If both CSVs exist, Anki opens two import dialogs: first vocab, then cloze.
@@ -272,6 +278,7 @@ Import behavior notes:
 - Known CSV header rows are stripped before import, so header labels are not imported as notes.
 - Incoming CSV rows are deduplicated before import (`Simplified` key for vocab, `Text` key for cloze).
 - User-deleted cards are remembered and skipped on future imports via `<output_dir>/.anki_deleted_keys.json`.
+- Imported note IDs are tracked in `<output_dir>/.anki_managed_notes.json` for safe overwrite behavior.
 
 ## Testing
 

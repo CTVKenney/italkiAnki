@@ -13,6 +13,8 @@ DEFAULT_CLOZE_FILENAME = "cloze_cards.csv"
 DEFAULT_AUDIO_SUBDIR = "audio"
 DEFAULT_IMPORT_MODE = "add-only"
 ImportMode = Literal["add-only", "overwrite"]
+DEFAULT_OVERWRITE_SCOPE = "tracked-only"
+OverwriteScope = Literal["tracked-only", "collection"]
 AUDIO_EXTENSIONS = (".mp3", ".m4a", ".wav", ".ogg")
 KNOWN_HEADER_ROWS = {
     ("English", "Pinyin", "Simplified", "Traditional", "Audio"),
@@ -22,6 +24,7 @@ FIELD_SEPARATOR = "\x1f"
 VOCAB_FIELD_NAME = "Simplified"
 CLOZE_FIELD_NAME = "Text"
 DELETED_KEYS_FILENAME = ".anki_deleted_keys.json"
+MANAGED_NOTES_FILENAME = ".anki_managed_notes.json"
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,7 @@ class AddonConfig:
     import_cloze: bool = True
     copy_audio: bool = True
     import_mode: ImportMode = DEFAULT_IMPORT_MODE
+    overwrite_scope: OverwriteScope = DEFAULT_OVERWRITE_SCOPE
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any] | None) -> "AddonConfig":
@@ -47,6 +51,9 @@ class AddonConfig:
             import_cloze=bool(data.get("import_cloze", True)),
             copy_audio=bool(data.get("copy_audio", True)),
             import_mode=normalize_import_mode(data.get("import_mode", DEFAULT_IMPORT_MODE)),
+            overwrite_scope=normalize_overwrite_scope(
+                data.get("overwrite_scope", DEFAULT_OVERWRITE_SCOPE)
+            ),
         )
 
 
@@ -126,6 +133,13 @@ def normalize_import_mode(raw: Any) -> ImportMode:
     if value == "overwrite":
         return "overwrite"
     return "add-only"
+
+
+def normalize_overwrite_scope(raw: Any) -> OverwriteScope:
+    value = str(raw or DEFAULT_OVERWRITE_SCOPE).strip().lower()
+    if value == "collection":
+        return "collection"
+    return "tracked-only"
 
 
 def read_csv_rows(path: Path) -> list[list[str]]:
@@ -369,6 +383,154 @@ def append_deleted_keys(base_dir: Path, keys_by_label: dict[str, set[str]]) -> i
     return after - before
 
 
+def _managed_notes_path(base_dir: Path) -> Path:
+    return base_dir / MANAGED_NOTES_FILENAME
+
+
+def load_managed_notes(base_dir: Path) -> dict[str, dict[str, set[int]]]:
+    path = _managed_notes_path(base_dir)
+    if not path.exists():
+        return {"vocab": {}, "cloze": {}}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {"vocab": {}, "cloze": {}}
+    if not isinstance(payload, dict):
+        return {"vocab": {}, "cloze": {}}
+
+    managed: dict[str, dict[str, set[int]]] = {"vocab": {}, "cloze": {}}
+    for label in ("vocab", "cloze"):
+        raw_label_map = payload.get(label, {})
+        if not isinstance(raw_label_map, dict):
+            continue
+        for raw_key, raw_note_ids in raw_label_map.items():
+            key = normalize_key_for_label(label, str(raw_key))
+            if not key:
+                continue
+            if not isinstance(raw_note_ids, list):
+                continue
+            note_ids: set[int] = set()
+            for raw_note_id in raw_note_ids:
+                try:
+                    note_id = int(raw_note_id)
+                except (TypeError, ValueError):
+                    continue
+                note_ids.add(note_id)
+            if note_ids:
+                managed[label][key] = note_ids
+    return managed
+
+
+def save_managed_notes(base_dir: Path, managed_notes: dict[str, dict[str, set[int]]]) -> None:
+    base_dir.mkdir(parents=True, exist_ok=True)
+    path = _managed_notes_path(base_dir)
+    payload: dict[str, dict[str, list[int]]] = {"vocab": {}, "cloze": {}}
+    for label in ("vocab", "cloze"):
+        label_map = managed_notes.get(label, {})
+        if not isinstance(label_map, dict):
+            continue
+        normalized_map: dict[str, list[int]] = {}
+        for key, raw_note_ids in label_map.items():
+            normalized_key = normalize_key_for_label(label, str(key))
+            if not normalized_key:
+                continue
+            normalized_note_ids: set[int] = set()
+            for raw_note_id in raw_note_ids:
+                try:
+                    normalized_note_ids.add(int(raw_note_id))
+                except (TypeError, ValueError):
+                    continue
+            note_ids = sorted(normalized_note_ids)
+            if note_ids:
+                normalized_map[normalized_key] = note_ids
+        payload[label] = dict(sorted(normalized_map.items()))
+
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def managed_key_index(base_dir: Path, label: str) -> dict[str, set[int]]:
+    managed = load_managed_notes(base_dir)
+    return {key: set(note_ids) for key, note_ids in managed.get(label, {}).items()}
+
+
+def append_managed_note_ids(
+    base_dir: Path,
+    *,
+    label: str,
+    note_ids_by_key: dict[str, set[int]],
+) -> int:
+    if not note_ids_by_key:
+        return 0
+    managed_notes = load_managed_notes(base_dir)
+    label_map = managed_notes.setdefault(label, {})
+    before = sum(len(ids) for ids in label_map.values())
+    for raw_key, raw_note_ids in note_ids_by_key.items():
+        key = normalize_key_for_label(label, raw_key)
+        if not key:
+            continue
+        if not raw_note_ids:
+            continue
+        normalized_ids: set[int] = set()
+        for raw_note_id in raw_note_ids:
+            try:
+                normalized_ids.add(int(raw_note_id))
+            except (TypeError, ValueError):
+                continue
+        if not normalized_ids:
+            continue
+        label_map.setdefault(key, set()).update(normalized_ids)
+    after = sum(len(ids) for ids in label_map.values())
+    if after != before:
+        save_managed_notes(base_dir, managed_notes)
+    return after - before
+
+
+def remove_managed_note_ids(base_dir: Path, note_ids: Iterable[int]) -> int:
+    remove_ids = {int(note_id) for note_id in note_ids}
+    if not remove_ids:
+        return 0
+    managed_notes = load_managed_notes(base_dir)
+    removed = 0
+    for label in ("vocab", "cloze"):
+        label_map = managed_notes.get(label, {})
+        for key in list(label_map.keys()):
+            existing = label_map[key]
+            remaining = existing - remove_ids
+            removed += len(existing) - len(remaining)
+            if remaining:
+                label_map[key] = remaining
+            else:
+                del label_map[key]
+    if removed:
+        save_managed_notes(base_dir, managed_notes)
+    return removed
+
+
+def collect_imported_note_ids_by_key(
+    *,
+    label: str,
+    rows: list[list[str]],
+    key_index_before: dict[str, list[int]],
+    key_index_after: dict[str, list[int]],
+) -> dict[str, set[int]]:
+    imported: dict[str, set[int]] = {}
+    seen_keys: set[str] = set()
+    for row in rows:
+        key = row_key(label, row)
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        before = set(key_index_before.get(key, []))
+        after = set(key_index_after.get(key, []))
+        added = after - before
+        if added:
+            imported[key] = added
+    return imported
+
+
 def keys_for_note_ids(collection: Any, note_ids: Iterable[int]) -> dict[str, set[str]]:
     ids = sorted({int(note_id) for note_id in note_ids})
     if not ids:
@@ -421,15 +583,38 @@ def filter_rows_by_import_mode(
     rows: list[list[str]],
     mode: ImportMode,
     key_index: dict[str, list[int]],
+    managed_note_ids_by_key: dict[str, set[int]] | None = None,
 ) -> tuple[list[list[str]], int, list[int]]:
     if mode == "overwrite":
+        if managed_note_ids_by_key is None:
+            note_ids: list[int] = []
+            for row in rows:
+                key = row_key(label, row)
+                if not key:
+                    continue
+                note_ids.extend(key_index.get(key, []))
+            return rows, 0, note_ids
+
+        kept: list[list[str]] = []
         note_ids: list[int] = []
+        protected = 0
         for row in rows:
             key = row_key(label, row)
             if not key:
+                kept.append(row)
                 continue
-            note_ids.extend(key_index.get(key, []))
-        return rows, 0, note_ids
+            existing_ids = key_index.get(key, [])
+            if not existing_ids:
+                kept.append(row)
+                continue
+            managed_ids = managed_note_ids_by_key.get(key, set())
+            removable = [note_id for note_id in existing_ids if note_id in managed_ids]
+            if removable and len(removable) == len(existing_ids):
+                note_ids.extend(removable)
+                kept.append(row)
+                continue
+            protected += 1
+        return kept, protected, note_ids
 
     kept: list[list[str]] = []
     skipped = 0

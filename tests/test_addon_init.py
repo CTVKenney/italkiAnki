@@ -213,6 +213,10 @@ def test_addon_overwrite_mode_deletes_existing_before_import(monkeypatch, tmp_pa
         "English,Pinyin,Simplified,Traditional,Audio\nlong holiday,cháng jià,长假,長假,[sound:a.mp3]\n",
         encoding="utf-8",
     )
+    (output_dir / ".anki_managed_notes.json").write_text(
+        json.dumps({"vocab": {"长假": [201, 202]}, "cloze": {}}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
 
     module, info_messages, warning_messages, _status_messages, imported_paths, _actions, deleted_ids, _mw = load_addon_with_fake_aqt(
         monkeypatch,
@@ -232,10 +236,38 @@ def test_addon_overwrite_mode_deletes_existing_before_import(monkeypatch, tmp_pa
     assert len(imported_paths) == 1
     assert sorted(deleted_ids) == [201, 202]
     assert "Deleted 2 existing note(s) before overwrite import." in info_messages[-1]
+    assert "Overwrite scope: tracked-only." in info_messages[-1]
     deleted_file = output_dir / ".anki_deleted_keys.json"
     if deleted_file.exists():
         payload = json.loads(deleted_file.read_text(encoding="utf-8"))
         assert "长假" not in set(payload.get("vocab", []))
+
+
+def test_addon_overwrite_mode_protects_unmanaged_existing_notes(monkeypatch, tmp_path):
+    output_dir = tmp_path / "output"
+    media_dir = tmp_path / "media"
+    output_dir.mkdir(parents=True)
+    media_dir.mkdir(parents=True)
+    (output_dir / "vocab_cards.csv").write_text(
+        "English,Pinyin,Simplified,Traditional,Audio\nlong holiday,cháng jià,长假,長假,[sound:a.mp3]\n",
+        encoding="utf-8",
+    )
+
+    module, info_messages, warning_messages, _status_messages, imported_paths, _actions, deleted_ids, _mw = load_addon_with_fake_aqt(
+        monkeypatch,
+        config={"output_dir": str(output_dir), "import_cloze": False, "import_mode": "overwrite"},
+        media_dir=media_dir,
+        has_collection=True,
+        notes_rows=[(210, 1, "book\x1fshū\x1f长假\x1f長假\x1f[sound:old.mp3]")],
+        model_fields_by_mid={1: ["English", "Pinyin", "Simplified", "Traditional", "Audio"]},
+    )
+
+    module._import_latest_cards()
+
+    assert not warning_messages
+    assert imported_paths == []
+    assert deleted_ids == []
+    assert "Protected 1 row(s): matching notes were not managed by this add-on." in info_messages[-1]
 
 
 def test_manual_deletion_is_tombstoned_and_skipped_later(monkeypatch, tmp_path):

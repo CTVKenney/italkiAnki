@@ -41,15 +41,24 @@ Default config:
   "import_vocab": true,
   "import_cloze": true,
   "copy_audio": true,
-  "import_mode": "add-only"
+  "import_mode": "add-only",
+  "overwrite_scope": "tracked-only"
 }
 ```
 
 `import_mode` behavior:
 - `add-only`: skip rows whose card key already exists in your collection.
-- `overwrite`: delete existing notes for incoming keys, then import new rows (replaces prior incorrect variants and removes duplicates for those keys).
+- `overwrite`: replace existing notes only when matches are managed by this add-on (safe default), then import new rows.
+
+`overwrite_scope` behavior (used when `import_mode` is `overwrite`):
+- `tracked-only` (default): only delete notes previously tracked as imported by this add-on.
+- `collection`: legacy behavior; delete all matching notes in the collection by key.
 
 Deleted-card memory:
 - When you delete a supported italki card in Anki, the add-on records its key.
 - Future imports skip rows with keys previously deleted by you.
 - Stored at `<output_dir>/.anki_deleted_keys.json`.
+
+Managed-note tracking:
+- Imported note IDs are tracked for safer overwrite matching.
+- Stored at `<output_dir>/.anki_managed_notes.json`.
