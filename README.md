@@ -236,16 +236,14 @@ Optional live Polly pronunciation integration test (off by default):
 
 ```bash
 export ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1
-export OPENAI_API_KEY='sk-...'
 # optional; defaults to us-east-1
 export AWS_DEFAULT_REGION='us-east-1'
-# optional override; default is gpt-4o-audio-preview
-export OPENAI_AUDIO_EVAL_MODEL='gpt-4o-audio-preview'
-.tools/bin/bazel test //:unit_tests --test_env=ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1 --test_env=OPENAI_API_KEY --test_env=OPENAI_AUDIO_EVAL_MODEL --test_env=AWS_DEFAULT_REGION --test_env=HOME
+.tools/bin/bazel test //:unit_tests --test_env=ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1 --test_env=AWS_DEFAULT_REGION --test_env=HOME
 ```
 
 Notes:
-- This test makes live API calls to both AWS Polly and OpenAI.
+- This test makes live API calls to AWS Polly only.
+- Tone verification is done locally via pitch-contour analysis (autocorrelation F0 model), not via an LLM.
 - It is skipped unless `ITALKI_RUN_POLLY_PRONUNCIATION_TEST=1` is set.
 
 ## Bazel build
