@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from italki_anki.cli import main, read_text_from_editor
+from italki_anki.tone_ai import TonePrediction
 
 
 def test_interactive_mode_builds_csv_output(monkeypatch, tmp_path):
@@ -124,3 +125,42 @@ def test_cli_emits_stub_classifier_warning_when_openai_disabled(monkeypatch, tmp
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "Classifier: stub heuristic" in captured.err
+
+
+def test_cli_tone_eval_mode_writes_json_with_mocked_classifier(monkeypatch, tmp_path, capsys):
+    audio_a = tmp_path / "a.mp3"
+    audio_b = tmp_path / "b.mp3"
+    audio_a.write_bytes(b"tone-3")
+    audio_b.write_bytes(b"tone-4")
+
+    manifest = tmp_path / "tones.tsv"
+    manifest.write_text(
+        f"{audio_a}\t3\n"
+        f"{audio_b}\t4\n",
+        encoding="utf-8",
+    )
+    output_json = tmp_path / "tone_eval.json"
+
+    class FakeToneClassifier:
+        def classify(self, audio_bytes: bytes, *, audio_format: str = "mp3") -> TonePrediction:
+            del audio_format
+            if audio_bytes == b"tone-3":
+                return TonePrediction(tone=3, transcript="hen3")
+            return TonePrediction(tone=4, transcript="hen4")
+
+    monkeypatch.setattr("italki_anki.cli.build_tone_classifier", lambda args: FakeToneClassifier())
+
+    exit_code = main(
+        [
+            "--tone-eval-tsv",
+            str(manifest),
+            "--tone-eval-json-out",
+            str(output_json),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "accuracy=1.0000" in captured.err
+    payload = json.loads(output_json.read_text(encoding="utf-8"))
+    assert payload["summary"]["correct"] == 2

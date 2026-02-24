@@ -14,6 +14,16 @@ from .builder import build_from_text, pick_audio_provider
 from .cards import BuildConfig
 from .llm import LLMClient, StubClient, openai_client_from_env
 from .runs import RunMode, create_run_context, publish_latest_artifacts, write_latest_run_manifest
+from .tone_ai import (
+    DEFAULT_TONE_MODEL_ID,
+    AutocorrelationTone34Classifier,
+    HFWav2Vec2PinyinToneClassifier,
+    ToneAIError,
+    ToneClassifier,
+    evaluate_tone_classifier,
+    load_tone_eval_samples,
+    write_tone_eval_json,
+)
 
 
 DEFAULT_EDITOR = "vi"
@@ -87,6 +97,51 @@ def build_status_reporter() -> tuple[Callable[[str], None], Callable[[], float]]
         return time.monotonic() - started
 
     return report, elapsed_seconds
+
+
+def build_tone_classifier(args: argparse.Namespace) -> ToneClassifier:
+    if args.tone_backend == "autocorr-3-4":
+        return AutocorrelationTone34Classifier()
+    if args.tone_backend == "hf-wav2vec2-pinyin":
+        return HFWav2Vec2PinyinToneClassifier(
+            model_id=args.tone_model_id,
+            device=args.tone_device,
+            syllable_index=args.tone_syllable_index,
+            allow_neutral_tone=args.tone_allow_neutral,
+        )
+    raise ToneAIError(f"unsupported tone backend: {args.tone_backend}")
+
+
+def tone_eval_command(args: argparse.Namespace) -> int:
+    samples = load_tone_eval_samples(args.tone_eval_tsv)
+    classifier = build_tone_classifier(args)
+    summary, records = evaluate_tone_classifier(classifier, samples)
+    print(f"Tone backend: {args.tone_backend}", file=sys.stderr)
+    if args.tone_backend == "hf-wav2vec2-pinyin":
+        print(f"Tone model: {args.tone_model_id}", file=sys.stderr)
+    print(
+        f"Tone eval: total={summary.total} predicted={summary.predicted} "
+        f"correct={summary.correct} accuracy={summary.accuracy:.4f}",
+        file=sys.stderr,
+    )
+    for tone in range(1, 6):
+        stats = summary.per_tone[tone]
+        print(
+            f"  tone {tone}: n={int(stats['n'])} "
+            f"correct={int(stats['correct'])} accuracy={float(stats['accuracy']):.4f}",
+            file=sys.stderr,
+        )
+
+    errors = [record for record in records if record.error]
+    if errors:
+        print(f"Prediction failures: {len(errors)}", file=sys.stderr)
+        for record in errors[:10]:
+            print(f"  {record.audio_path}: {record.error}", file=sys.stderr)
+
+    if args.tone_eval_json_out:
+        output_path = write_tone_eval_json(args.tone_eval_json_out, summary, records)
+        print(f"Wrote tone eval JSON: {output_path}", file=sys.stderr)
+    return 0 if not errors else 2
 
 
 def build_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -215,6 +270,41 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--tone-eval-tsv",
+        help="Evaluate tone classifier on TSV/CSV rows: <audio_path><tab><expected_tone>.",
+    )
+    parser.add_argument(
+        "--tone-eval-json-out",
+        help="Optional JSON output path for --tone-eval-tsv detailed results.",
+    )
+    parser.add_argument(
+        "--tone-backend",
+        choices=("hf-wav2vec2-pinyin", "autocorr-3-4"),
+        default="hf-wav2vec2-pinyin",
+        help="Tone backend for --tone-eval-tsv.",
+    )
+    parser.add_argument(
+        "--tone-model-id",
+        default=DEFAULT_TONE_MODEL_ID,
+        help="Hugging Face model id for hf-wav2vec2-pinyin backend.",
+    )
+    parser.add_argument(
+        "--tone-device",
+        default="cpu",
+        help="Torch device for hf-wav2vec2-pinyin backend (for example: cpu, cuda).",
+    )
+    parser.add_argument(
+        "--tone-syllable-index",
+        type=int,
+        default=-1,
+        help="Syllable index used when multiple tones are detected in transcript (default: -1).",
+    )
+    parser.add_argument(
+        "--tone-allow-neutral",
+        action="store_true",
+        help="Allow tone 5 predictions in hf-wav2vec2-pinyin backend.",
+    )
     return parser
 
 
@@ -223,6 +313,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     raw_argv = list(sys.argv[1:] if argv is None else argv)
     args = parser.parse_args(normalize_legacy_argv(raw_argv))
     try:
+        if args.tone_eval_tsv:
+            return tone_eval_command(args)
         return build_command(args, parser)
     except RuntimeError as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -201,6 +201,44 @@ italki-anki --interactive --audio --out-dir output
 italki-anki --interactive --openai --audio --out-dir "$HOME/Chinese/italki-output"
 ```
 
+## Tone AI Evaluation (High-Accuracy Path)
+
+This project now supports a dedicated tone-evaluation mode using a pluggable backend.
+
+Install optional dependencies for the Hugging Face backend:
+
+```bash
+pip install torch transformers
+```
+
+Prepare a TSV (or CSV) with labeled samples:
+
+```text
+/abs/path/to/audio_001.mp3	3
+/abs/path/to/audio_002.wav	4
+```
+
+Run evaluation:
+
+```bash
+italki-anki \
+  --tone-eval-tsv /abs/path/to/samples.tsv \
+  --tone-backend hf-wav2vec2-pinyin \
+  --tone-model-id snu-nia-12/wav2vec2-large-xlsr-53_nia12_phone-pinyin_chinese \
+  --tone-eval-json-out /abs/path/to/tone_eval.json
+```
+
+Alternative legacy comparator (tone 3 vs 4 only):
+
+```bash
+italki-anki --tone-eval-tsv /abs/path/to/samples.tsv --tone-backend autocorr-3-4
+```
+
+Notes:
+- `hf-wav2vec2-pinyin` supports tones 1-5 (tone digits parsed from model transcript).
+- `autocorr-3-4` is the legacy deterministic fallback and only predicts tones 3/4.
+- Main card generation workflow is unchanged.
+
 ## Multi-run behavior
 
 Use `--run-mode` to control output lifecycle:
